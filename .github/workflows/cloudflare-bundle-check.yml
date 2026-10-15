@@ -1,6 +1,8 @@
 name: APEX Cloudflare bundle preflight (NO DEPLOY)
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
