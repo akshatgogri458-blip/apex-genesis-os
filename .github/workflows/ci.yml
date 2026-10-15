@@ -1,5 +1,6 @@
 name: APEX Genesis — independent source CI
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
