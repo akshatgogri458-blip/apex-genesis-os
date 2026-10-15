@@ -1,0 +1,47 @@
+name: APEX Cloudflare bundle preflight (NO DEPLOY)
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-bundle-check.yml'
+      - 'wrangler.toml'
+      - 'src/worker.ts'
+      - 'src/db/cloudflare-d1-adapter.ts'
+      - 'src/types/cloudflare.d.ts'
+      - 'migrations/**'
+permissions:
+  contents: read
+jobs:
+  verify-cloudflare-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install project dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check native Worker TypeScript
+        run: npx --no-install tsc -p tsconfig.worker.json --noEmit
+      - name: Compile Cloudflare Worker bundle locally WITHOUT deployment
+        run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-preflight
+      - name: Explain remaining setup (no secrets printed)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, os
+          cfg=pathlib.Path('wrangler.toml').read_text()
+          placeholder=bool(re.search(r'database_id\s*=\s*"00000000-0000-0000-0000-000000000000"',cfg))
+          heading='## Cloudflare dry-run results\n'
+          details='**Worker bundle:** validated locally; nothing deployed.\n'
+          if placeholder:
+              details+='**Cloud database:** NOT CONFIGURED. Real D1 database ID is still required before a live deployment.\n'
+          details+='**Account authorization, Google login, AI inference and real external providers:** NOT TESTED.\n'
+          details+='**Payment:** This workflow does not create, deploy, or purchase resources.\n'
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:f.write(heading+details)
+          print(heading+details)
+          PY
