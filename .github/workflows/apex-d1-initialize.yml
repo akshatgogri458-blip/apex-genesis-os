@@ -1,0 +1,49 @@
+name: APEX — Set up Cloudflare D1 database (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  initialize-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_ACCOUNT_ID: '49c4c1da1b6bd63b00b80e23b6f1dc73'
+      CLOUDFLARE_API_TOKEN: ${{ secrets.APEX_D1_MIGRATION_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check private migration permission exists
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Migration token missing. Add GitHub Actions secret APEX_D1_MIGRATION_TOKEN. Do not post it in an issue or chat."
+            exit 1
+          fi
+      - name: Check target database and all five migrations safely (offline)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sqlite3,re
+          cfg=Path('wrangler.toml').read_text()
+          assert re.search(r'database_id\s*=\s*"7e8a8751-3b9e-469a-98df-837cf5917ca3"',cfg),'Wrong target D1 database ID'
+          sqls=sorted(Path('migrations').glob('*.sql'))
+          assert len(sqls)==5,'Expected exactly five migrations'
+          conn=sqlite3.connect(':memory:')
+          for p in sqls:
+            sql=p.read_text()
+            assert not re.search(r'\b(DROP\s+TABLE|DELETE\s+FROM|TRUNCATE|ALTER\s+TABLE\s+\w+\s+DROP)\b',sql,re.I),'Unsafe migration'
+            conn.executescript(sql)
+            print('validated',p.name)
+          count=conn.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchone()[0]
+          assert count==33,f'Unexpected table count: {count}'
+          print('Offline SQLite migration verification passed: 33 tables.')
+          PY
+      - name: Apply official D1 migrations to owner database (remote)
+        shell: bash
+        run: npx --yes wrangler@4 d1 migrations apply apex_genesis_db --remote
+      - name: Confirm actual database schema (remote, read only)
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute apex_genesis_db --remote --command "SELECT COUNT(*) AS table_count FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
+          echo "D1 setup command completed; review the table_count above, then verify in Cloudflare Overview."
