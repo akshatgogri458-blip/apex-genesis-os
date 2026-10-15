@@ -27,6 +27,8 @@ jobs:
           cache: npm
       - name: Clean install from lockfile
         run: npm ci
+      - name: Validate installed dependency graph
+        run: npm ls --depth=0
       - name: Strict TypeScript compilation
         run: |
           npx tsc -p tsconfig.json --noEmit
