@@ -2,9 +2,15 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "module": "ESNext",
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "lib": ["ES2022", "WebWorker"],
     "types": []
   },
-  "include": ["src/worker.ts", "src/db/cloudflare-d1-adapter.ts", "src/types/cloudflare.d.ts"]
+  "include": [
+    "src/worker.ts",
+    "src/db/cloudflare-d1-adapter.ts",
+    "src/types/cloudflare.d.ts",
+    "src/security/sanitizer.ts",
+    "src/security/public-repo-guard.ts"
+  ]
 }

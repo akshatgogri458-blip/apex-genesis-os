@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const parser = require('@babel/parser');
-const traverse = require('@babel/traverse').default || require('@babel/traverse');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -20,7 +19,41 @@ function walk(dir) {
   return results;
 }
 
-// 1. If native tsc binary is installed in node_modules/.bin/tsc, run all 3 tsconfig targets unconditionally
+function walkAst(node, visitors) {
+  if (!node || typeof node !== 'object') return;
+  if (node.type && typeof visitors[node.type] === 'function') {
+    visitors[node.type](node);
+  }
+  for (const key of Object.keys(node)) {
+    if (key === 'loc' || key === 'start' || key === 'end' || key === 'leadingComments' || key === 'trailingComments') {
+      continue;
+    }
+    const child = node[key];
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        if (item && typeof item === 'object') walkAst(item, visitors);
+      }
+    } else if (child && typeof child === 'object') {
+      walkAst(child, visitors);
+    }
+  }
+}
+
+// 1. Verify package.json and package-lock.json synchronization
+const pkgJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+const lockJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf8'));
+if (!lockJson.packages || !lockJson.packages['']) {
+  console.error('[APEX-TYPECHECK] Invalid package-lock.json: missing root package entry.');
+  process.exit(1);
+}
+for (const [dep, range] of Object.entries(pkgJson.devDependencies || {})) {
+  if (lockJson.packages[''].devDependencies?.[dep] !== range || !lockJson.packages[`node_modules/${dep}`]) {
+    console.error(`[APEX-TYPECHECK] Lockfile out of sync for ${dep}@${range}.`);
+    process.exit(1);
+  }
+}
+
+// 2. If native tsc binary is installed in node_modules/.bin/tsc, run all 3 tsconfig targets unconditionally
 const tscBin = path.join(ROOT, 'node_modules', '.bin', 'tsc');
 if (fs.existsSync(tscBin)) {
   for (const cfg of ['tsconfig.json', 'tsconfig.worker.json', 'tsconfig.browser.json']) {
@@ -32,7 +65,7 @@ if (fs.existsSync(tscBin)) {
   }
 }
 
-// 2. Strict AST, Exported Symbol Verification, & Worker Environment Isolation Check
+// 3. Strict AST, Exported Symbol Verification, & Worker Environment Isolation Check
 const files = [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'tests'))];
 const errors = [];
 
@@ -40,9 +73,10 @@ const workerPureFiles = new Set([
   path.join(ROOT, 'src', 'worker.ts'),
   path.join(ROOT, 'src', 'db', 'cloudflare-d1-adapter.ts'),
   path.join(ROOT, 'src', 'types', 'cloudflare.d.ts'),
+  path.join(ROOT, 'src', 'security', 'sanitizer.ts'),
+  path.join(ROOT, 'src', 'security', 'public-repo-guard.ts'),
 ]);
 
-// First pass: collect all exported symbols per module
 const moduleExports = new Map();
 
 for (const file of files) {
@@ -59,9 +93,9 @@ for (const file of files) {
   }
 
   const exportsSet = new Set();
-  traverse(ast, {
-    ExportNamedDeclaration(p) {
-      const decl = p.node.declaration;
+  walkAst(ast, {
+    ExportNamedDeclaration(node) {
+      const decl = node.declaration;
       if (decl) {
         if (decl.id && decl.id.name) exportsSet.add(decl.id.name);
         if (decl.declarations) {
@@ -70,8 +104,8 @@ for (const file of files) {
           }
         }
       }
-      if (p.node.specifiers) {
-        for (const s of p.node.specifiers) {
+      if (node.specifiers) {
+        for (const s of node.specifiers) {
           if (s.exported && s.exported.name) exportsSet.add(s.exported.name);
         }
       }
@@ -96,18 +130,17 @@ function resolveImportTarget(fromFile, importSource) {
   return candidates.find((c) => fs.existsSync(c)) || null;
 }
 
-// Second pass: verify every relative import's named specifiers and Worker environment purity
 for (const [file, { ast }] of moduleExports.entries()) {
   const isWorkerPure = workerPureFiles.has(file);
 
-  traverse(ast, {
-    Identifier(p) {
-      if (isWorkerPure && p.node.name === 'require') {
+  walkAst(ast, {
+    Identifier(node) {
+      if (isWorkerPure && node.name === 'require') {
         errors.push(`${path.relative(ROOT, file)}: Prohibited Node.js 'require' identifier inside Cloudflare Worker module.`);
       }
     },
-    ImportDeclaration(p) {
-      const src = p.node.source.value;
+    ImportDeclaration(node) {
+      const src = node.source.value;
       if (isWorkerPure && ['fs', 'child_process', 'path', 'http', 'crypto'].includes(src)) {
         errors.push(`${path.relative(ROOT, file)}: Prohibited Node.js built-in import '${src}' inside Cloudflare Worker module.`);
       }
@@ -119,7 +152,7 @@ for (const [file, { ast }] of moduleExports.entries()) {
         }
         const targetInfo = moduleExports.get(resolved);
         if (targetInfo) {
-          for (const spec of p.node.specifiers) {
+          for (const spec of node.specifiers) {
             if (spec.type === 'ImportSpecifier' && spec.imported && spec.imported.name) {
               const importedName = spec.imported.name;
               if (!targetInfo.exportsSet.has(importedName)) {
