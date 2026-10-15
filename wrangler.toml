@@ -15,7 +15,7 @@ crons = ["*/15 * * * *"]
 [[d1_databases]]
 binding = "APEX_DB"
 database_name = "apex_genesis_db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "7e8a8751-3b9e-469a-98df-837cf5917ca3"
 migrations_dir = "migrations"
 
 [ai]
