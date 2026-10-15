@@ -2,7 +2,8 @@ name: Stage APEX Issue 1 Gemini candidate
 on:
   push:
     paths:
-      - 'imports/APEX_V9_1_ISSUE1_FIX_CANDIDATE.zip'
+      - 'imports/APEX_V9_1_ISSUE1_FIX_CANDIDATE*.zip'
+      - '.github/workflows/import-issue1-candidate.yml'
   workflow_dispatch:
 permissions:
   contents: write
@@ -21,7 +22,7 @@ jobs:
         shell: bash
         run: |
           git fetch origin main
-          git show origin/main:imports/APEX_V9_1_ISSUE1_FIX_CANDIDATE.zip > /tmp/apex_issue1_candidate.zip
+          git show 'origin/main:imports/APEX_V9_1_ISSUE1_FIX_CANDIDATE (1).zip' > /tmp/apex_issue1_candidate.zip
       - name: Verify exact archive and contents
         shell: bash
         run: |
