@@ -1,0 +1,40 @@
+name: Capture native TypeScript diagnostics
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-tsc.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Reproduce compiler failures with exact dependency tree
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          mkdir -p docs
+          printf '# Native TypeScript compile diagnostics (Node 20 CI)\n\n' > docs/CI_NATIVE_TSC_DIAGNOSTICS.md
+          printf 'These are compiler messages, not source-code changes.\n\n' >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md
+          for cfg in tsconfig.json tsconfig.worker.json tsconfig.browser.json; do
+            printf '## %s\n\n```text\n' "$cfg" >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md
+            ./node_modules/.bin/tsc -p "$cfg" --noEmit --pretty false >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md 2>&1
+            printf 'Exit status: %s\n```\n\n' "$?" >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md
+          done
+          cat docs/CI_NATIVE_TSC_DIAGNOSTICS.md
+      - name: Publish exact diagnostics for review
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CI_NATIVE_TSC_DIAGNOSTICS.md
+          git commit -m 'test(ci): record exact strict TypeScript diagnostics from runner'
+          git push origin HEAD:main
