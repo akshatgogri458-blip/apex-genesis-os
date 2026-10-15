@@ -1,21 +1,27 @@
 # APEX Genesis OS
 
-Public source repository for the APEX Genesis autonomous career-intelligence system.
+**Code available. Live application not yet deployed.**
 
-> **Status:** Repository initialized. The full V9 source import is **pending**; do not treat this README as an operational deployment.
+APEX Genesis is an autonomous career-assistance application under development. This public repository currently contains the V9.1 source, including the job-research, candidate-matching, document, agent and Cloudflare Worker modules.
 
-## Development policy
+## Project state
 
-- Keep the existing V7–V9 visual implementation stable while focusing on genuine functionality, security, autonomy and reliable cloud execution.
-- No real candidate resumes, personal records, account credentials, access tokens, session cookies or production databases may be committed here.
-- Synthetic demo data must remain explicitly labeled as synthetic; no claims of employer submissions without independent evidence.
-- Changes must include tests and a verifiable remote commit URL. Local-only commits are not evidence of publication.
-- Remain within genuinely free cloud allocations; never activate paid services without explicit authorization.
+- **Source:** published on `main`.
+- **Automated checks:** clean npm install, native TypeScript for Node/Worker/Browser, lint/security scan, build, and supplied test suite succeeded on GitHub Actions at the Issue #1 merge.
+- **Cloudflare:** remote Worker/D1 deployment and real inference are still **UNVERIFIED**.
+- **External connections:** Gmail, Calendar and employer submissions still need real authorization and evidence.
+- **Costs:** intended to stay on free tiers; no promise of unlimited processing or provider quotas.
 
-## Cross-account GitHub collaboration
+**Next owner action:** [Follow the short Cloudflare account setup instructions](docs/NEXT_STEP_CLOUDFLARE.md).
 
-The repository is public **for reading and cloning**, not anonymous writing. Gemini may access the code from another Google account, but to push changes it must authenticate with a GitHub identity that has repository write access. The owner can authorize the same GitHub account in Gemini's integration or invite a separate GitHub identity as a collaborator. Do not paste GitHub tokens into chat prompts.
+**Engineering priority:** production deployments and real authorized integrations. Keep existing UI/3D visuals unchanged for now.
 
-## Source provenance
+## Gemini handoff (different Google account)
 
-The owner supplied V9 source archive reports a local commit `938ac19cd7a43fcdad3c3e3662a28c8b0808aea5` on `v9-production-truth`. That is not yet a remote commit in this GitHub repository. A future source-only import will have its own independently verifiable SHA.
+This repository is public and readable by Gemini through its GitHub integration, but importing code in Gemini web does not itself give permission to push changes. Use an authorized GitHub writer or deliver a source archive for GitHub import. Every completion report must contain the actual remote branch, full 40-character commit SHA, clickable commit URL and GitHub Actions run.
+
+## Safety
+
+Never commit API keys, Google credentials, private candidate resumes, sessions, application records, or any other real personal data. This code and its test suite do not establish that real employer applications have been submitted.
+
+Repository owner's original `V9` local SHA was `938ac19cd7a43fcdad3c3e3662a28c8b0808aea5`, but GitHub's imported source has independent commit history.
