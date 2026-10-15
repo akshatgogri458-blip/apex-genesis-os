@@ -1,0 +1,36 @@
+# Local runtime secrets and personal records
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+secrets/
+private/
+candidate-records/
+candidate-data/
+resumes/private/
+
+# dependencies and artifacts
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+__pycache__/
+.pytest_cache/
+.wrangler/
+.vercel/
+
+# cache and editor
+.cache/
+.tmp/
+.idea/
+.vscode/
