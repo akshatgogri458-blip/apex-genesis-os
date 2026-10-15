@@ -1,0 +1,59 @@
+name: Import APEX V9.1 safe source
+on:
+  push:
+    paths:
+      - 'imports/APEX_GENESIS_V9_1_SAFE_PUBLIC_IMPORT.zip'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: apex-v9-1-source-import
+  cancel-in-progress: false
+jobs:
+  import-v9-1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Verify exact archive and extract source files only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, zipfile, stat
+          archive=Path('imports/APEX_GENESIS_V9_1_SAFE_PUBLIC_IMPORT.zip')
+          expected='28c680c77b9c7f49ef50af12b6ab26d85ee0d048e89ec836f8d258bd0e80a1cb'
+          if not archive.is_file() or hashlib.sha256(archive.read_bytes()).hexdigest()!=expected:
+              raise SystemExit('Unexpected or missing ZIP; refusing import')
+          allowed=('src/','tests/','scripts/','migrations/','public/','docs/')
+          roots={'package.json','package-lock.json','wrangler.toml','tsconfig.json','tsconfig.worker.json','tsconfig.browser.json','independent_adversarial_test.cjs'}
+          with zipfile.ZipFile(archive) as z:
+              if z.testzip() is not None: raise SystemExit('Corrupt ZIP')
+              entries=[e for e in z.infolist() if not e.is_dir()]
+              if len(entries)!=103: raise SystemExit('Unexpected file count')
+              for e in entries:
+                  n=e.filename
+                  if n=='.github/workflows/ci.yml': continue
+                  if ('..' in n.split('/') or n.startswith('/') or chr(92) in n or
+                      (e.external_attr >> 16) & 0o170000 == stat.S_IFLNK or
+                      not (n.startswith(allowed) or n in roots) or
+                      n.endswith(('.sqlite','.db','.pem','.key'))):
+                      raise SystemExit('Forbidden path: '+n)
+                  b=z.read(e)
+                  if len(b)>1000000: raise SystemExit('Excessive file size: '+n)
+                  p=Path(n);p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(b)
+                  print('imported',n)
+          PY
+      - name: Commit source import to main
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- src tests scripts migrations public docs package.json package-lock.json wrangler.toml tsconfig.json tsconfig.worker.json tsconfig.browser.json independent_adversarial_test.cjs
+          if git diff --cached --quiet; then echo 'Source already imported'; else
+            git commit -m 'feat: import sanitized APEX Genesis V9.1 source and tests'
+            git push origin HEAD:main
+          fi
