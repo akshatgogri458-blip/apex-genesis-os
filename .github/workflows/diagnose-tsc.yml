@@ -25,11 +25,13 @@ jobs:
           mkdir -p docs
           printf '# Native TypeScript compile diagnostics (Node 20 CI)\n\n' > docs/CI_NATIVE_TSC_DIAGNOSTICS.md
           printf 'These are compiler messages, not source-code changes.\n\n' >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md
+          set +e
           for cfg in tsconfig.json tsconfig.worker.json tsconfig.browser.json; do
             printf '## %s\n\n```text\n' "$cfg" >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md
             ./node_modules/.bin/tsc -p "$cfg" --noEmit --pretty false >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md 2>&1
             printf 'Exit status: %s\n```\n\n' "$?" >> docs/CI_NATIVE_TSC_DIAGNOSTICS.md
           done
+          set -e
           cat docs/CI_NATIVE_TSC_DIAGNOSTICS.md
       - name: Publish exact diagnostics for review
         run: |
