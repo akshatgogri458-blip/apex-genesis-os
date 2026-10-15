@@ -72,19 +72,19 @@ function randomHex(byteLen: number): string {
 }
 
 async function sha256Hex(input: string): Promise<string> {
-  const digest = await webCrypto.subtle.digest('SHA-256', textEncoder.encode(input));
+  const digest = await webCrypto.subtle.digest('SHA-256', textEncoder.encode(input) as unknown as BufferSource);
   return toHex(digest);
 }
 
 async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const key = await webCrypto.subtle.importKey(
     'raw',
-    textEncoder.encode(secret),
+    textEncoder.encode(secret) as unknown as BufferSource,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
   );
-  const sig = await webCrypto.subtle.sign('HMAC', key, textEncoder.encode(message));
+  const sig = await webCrypto.subtle.sign('HMAC', key, textEncoder.encode(message) as unknown as BufferSource);
   return toHex(sig);
 }
 
@@ -94,13 +94,13 @@ async function pbkdf2Hex(
   iterations = 60_000
 ): Promise<{ hashHex: string; cpuMs: number }> {
   const t0 = performance.now();
-  const baseKey = await webCrypto.subtle.importKey('raw', textEncoder.encode(password), 'PBKDF2', false, [
+  const baseKey = await webCrypto.subtle.importKey('raw', textEncoder.encode(password) as unknown as BufferSource, 'PBKDF2', false, [
     'deriveBits',
   ]);
   const bits = await webCrypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
-      salt: textEncoder.encode(saltHex),
+      salt: textEncoder.encode(saltHex) as unknown as BufferSource,
       iterations,
       hash: 'SHA-512',
     },
@@ -930,7 +930,7 @@ export default {
         try {
           const pubKey = await webCrypto.subtle.importKey(
             'jwk',
-            jwk,
+            jwk as JsonWebKey,
             { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
             false,
             ['verify']
@@ -939,7 +939,7 @@ export default {
             'RSASSA-PKCS1-v1_5',
             pubKey,
             base64UrlToUint8Array(sigB64Url) as unknown as BufferSource,
-            textEncoder.encode(`${headerB64}.${payloadB64}`)
+            textEncoder.encode(`${headerB64}.${payloadB64}`) as unknown as BufferSource
           );
         } catch {
           sigValid = false;

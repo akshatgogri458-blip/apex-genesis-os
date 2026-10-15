@@ -1,9 +1,9 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ApexD1Database, D1Result } from '../src/db/d1-sqlite-engine';
+import { ApexD1Database } from '../src/db/d1-sqlite-engine';
 import { SecurityGuard } from '../src/security/auth';
 import {
   CANONICAL_PUBLIC_REPO_URL,
@@ -21,7 +21,11 @@ import { RecruitmentWorkflowEngine } from '../src/recruitment/engine';
 import { AuthorizedIntegrationNexus } from '../src/integrations/nexus';
 import { ApexApplicationApi } from '../src/api/router';
 import worker, { Env } from '../src/worker';
-import { CloudflareD1DatabaseBinding, CloudflareD1PreparedStatement, CloudflareD1Result } from '../src/types/cloudflare';
+import {
+  CloudflareD1DatabaseBinding,
+  CloudflareD1PreparedStatement,
+  CloudflareD1Result,
+} from '../src/types/cloudflare';
 
 const TEST_DB_PATH = path.resolve(__dirname, '../../.tmp_v9_1_reliability_test.sqlite');
 const SCHEMA_1 = path.resolve(__dirname, '../../migrations/0001_genesis_schema.sql');
@@ -30,26 +34,46 @@ const SCHEMA_3 = path.resolve(__dirname, '../../migrations/0003_v8_reality_engin
 const SCHEMA_4 = path.resolve(__dirname, '../../migrations/0004_v9_production_truth.sql');
 const SCHEMA_5 = path.resolve(__dirname, '../../migrations/0005_v9_public_repo_reliability.sql');
 
-function adaptD1Result<T>(result: D1Result<T>): CloudflareD1Result<T> {
-  return { ...result, meta: { ...result.meta, duration: result.meta.duration_ms } };
-}
-
 function createAsyncD1Binding(sqliteDb: ApexD1Database): CloudflareD1DatabaseBinding {
-  const wrapStmt = (sql: string, boundValues: unknown[] = []): CloudflareD1PreparedStatement => ({
-    bind(...values: unknown[]) {
+  const wrapStmt = (sql: string, boundValues: any[] = []): CloudflareD1PreparedStatement => ({
+    bind(...values: any[]) {
       return wrapStmt(sql, values);
     },
-    async first<T = Record<string, unknown>>(colName?: string): Promise<T | null> {
+    async first<T = Record<string, any>>(colName?: string): Promise<T | null> {
       await Promise.resolve();
-      return sqliteDb.prepare(sql).bind(...boundValues).first<T>(colName);
+      const row = sqliteDb.prepare(sql).bind(...boundValues).first<any>();
+      if (!row) return null;
+      return colName ? (row[colName] ?? null) : (row as T);
     },
-    async all<T = Record<string, unknown>>() {
+    async run<T = Record<string, any>>(): Promise<CloudflareD1Result<T>> {
       await Promise.resolve();
-      return adaptD1Result(sqliteDb.prepare(sql).bind(...boundValues).all<T>());
+      const res = sqliteDb.prepare(sql).bind(...boundValues).run();
+      return {
+        results: [],
+        success: res.success,
+        meta: {
+          duration: res.meta.duration_ms,
+          changes: res.meta.changes,
+          last_row_id: res.meta.last_row_id,
+          rows_read: 1,
+          rows_written: Math.max(1, res.meta.changes),
+        },
+      };
     },
-    async run<T = Record<string, any>>() {
+    async all<T = Record<string, any>>(): Promise<CloudflareD1Result<T>> {
       await Promise.resolve();
-      return adaptD1Result(sqliteDb.prepare(sql).bind(...boundValues).run() as D1Result<T>);
+      const res = sqliteDb.prepare(sql).bind(...boundValues).all<T>();
+      return {
+        results: res.results,
+        success: true,
+        meta: {
+          duration: res.meta.duration_ms,
+          changes: 0,
+          last_row_id: 0,
+          rows_read: Math.max(1, res.results.length),
+          rows_written: 0,
+        },
+      };
     },
   });
 
@@ -57,14 +81,15 @@ function createAsyncD1Binding(sqliteDb: ApexD1Database): CloudflareD1DatabaseBin
     prepare(query: string) {
       return wrapStmt(query, []);
     },
-    async batch<T = Record<string, any>>(statements: CloudflareD1PreparedStatement[]) {
+    async batch<T = Record<string, any>>(statements: CloudflareD1PreparedStatement[]): Promise<CloudflareD1Result<T>[]> {
       const out: CloudflareD1Result<T>[] = [];
       for (const s of statements) {
-        out.push(await s.all<T>());
+        out.push(await s.run<T>());
       }
       return out;
     },
-    async exec(query: string) {
+    async exec(query: string): Promise<{ count: number; duration: number }> {
+      await Promise.resolve();
       sqliteDb.exec(query);
       return { count: 1, duration: 1 };
     },
@@ -113,7 +138,16 @@ test('APEX GENESIS V9.1 — Public Repository Safety, Timestamped Webhook Anti-R
     APEX_ENV: 'development',
   };
 
-  await t.test('1. Public Repository Metadata, Secret Detector & Candidate PII Redaction Guard (Node & Worker)', async () => {
+  await t.test('1. Public Repository Metadata, Lockfile Sync, Secret Detector & Candidate PII Redaction Guard (Node & Worker)', async () => {
+    const pkgJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'));
+    const lockJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package-lock.json'), 'utf8'));
+    assert.equal(pkgJson.version, lockJson.version, 'package.json and package-lock.json versions must match');
+    assert.equal(lockJson.lockfileVersion, 3);
+    for (const [depName, depRange] of Object.entries(pkgJson.devDependencies || {})) {
+      assert.equal(lockJson.packages[''].devDependencies[depName], depRange);
+      assert.ok(lockJson.packages[`node_modules/${depName}`], `Missing ${depName} in package-lock.json`);
+    }
+
     const nodeMeta = await api.handle({
       method: 'GET',
       path: '/api/system/repository-metadata',
