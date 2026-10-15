@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "WebWorker"],
+    "types": []
+  },
+  "include": ["src/worker.ts", "src/db/cloudflare-d1-adapter.ts", "src/types/cloudflare.d.ts"]
+}

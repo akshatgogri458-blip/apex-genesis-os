@@ -1,0 +1,41 @@
+{
+  "name": "apex-genesis-os",
+  "version": "9.1.0",
+  "description": "APEX GENESIS V9.1 (OPERATION PRODUCTION TRUTH) — Autonomous Career Intelligence OS",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshatgogri458-blip/apex-genesis-os.git"
+  },
+  "homepage": "https://github.com/akshatgogri458-blip/apex-genesis-os",
+  "bugs": {
+    "url": "https://github.com/akshatgogri458-blip/apex-genesis-os/issues"
+  },
+  "scripts": {
+    "typecheck": "node scripts/typecheck.cjs",
+    "lint": "node scripts/lint.cjs && node scripts/scan_public_repo_safety.cjs",
+    "safety:scan": "node scripts/scan_public_repo_safety.cjs",
+    "build": "node scripts/build.cjs",
+    "test": "node scripts/build.cjs && node --test dist/tests/milestone1.test.js dist/tests/milestone2.test.js dist/tests/milestone3.test.js dist/tests/milestone4.test.js dist/tests/milestone5.test.js dist/tests/milestone6.test.js dist/tests/milestone7_8.test.js dist/tests/milestone9_10.test.js dist/tests/phase1_adversarial_security.test.js dist/tests/phase3_cloudflare_worker_d1.test.js dist/tests/phase10_release_gates.test.js dist/tests/v8_reality_engine_gates.test.js dist/tests/v9_production_truth_adversarial.test.js dist/tests/v9_1_public_repo_and_reliability.test.js",
+    "test:security": "node scripts/build.cjs && node --test dist/tests/phase1_adversarial_security.test.js dist/tests/v8_reality_engine_gates.test.js dist/tests/v9_production_truth_adversarial.test.js dist/tests/v9_1_public_repo_and_reliability.test.js",
+    "test:worker": "node scripts/build.cjs && node --test dist/tests/phase3_cloudflare_worker_d1.test.js dist/tests/v9_production_truth_adversarial.test.js dist/tests/v9_1_public_repo_and_reliability.test.js",
+    "test:e2e": "node scripts/build.cjs && node --test dist/tests/v8_reality_engine_gates.test.js dist/tests/v9_production_truth_adversarial.test.js dist/tests/v9_1_public_repo_and_reliability.test.js",
+    "test:browser": "node scripts/build.cjs && node --test dist/tests/phase5_6_browser_ui.test.js",
+    "start": "node scripts/build.cjs && node dist/src/server/local-server.js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.12",
+    "@babel/parser": "^7.20.15",
+    "@babel/preset-env": "^7.20.2",
+    "@babel/preset-react": "^7.18.6",
+    "@babel/preset-typescript": "^7.18.6",
+    "@babel/traverse": "^7.20.13",
+    "@types/node": "^18.18.14",
+    "eslint": "^8.38.0",
+    "typescript": "^5.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED"
+}

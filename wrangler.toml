@@ -1,0 +1,33 @@
+name = "apex-genesis-os"
+main = "src/worker.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Strict Zero-Cost Free Tier Configuration
+# Official Cloudflare Workers Free Tier Limits (Verified Oct 2026):
+# - 100,000 HTTP requests / day (resets 00:00 UTC)
+# - 10 ms CPU time per HTTP invocation / Cron trigger
+# - Up to 5 Cron Triggers per account
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "APEX_DB"
+database_name = "apex_genesis_db"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[ai]
+binding = "AI"
+
+[vars]
+APEX_ENV = "production"
+ZERO_COST_ENFORCED = "true"
+CF_FREE_DAILY_REQUEST_LIMIT = "100000"
+CF_FREE_CPU_MS_LIMIT = "10"
+CF_D1_FREE_DAILY_READ_LIMIT = "5000000"
+CF_D1_FREE_DAILY_WRITE_LIMIT = "100000"
+CF_WORKERS_AI_DAILY_NEURON_LIMIT = "10000"
+GEMINI_FREE_DAILY_REQUEST_LIMIT = "1500"
+GEMINI_FREE_RPM_LIMIT = "10"

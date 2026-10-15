@@ -1,0 +1,3238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#050711">
+  <title>APEX — Mission Control (V7 Infinity)</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #04060e;
+      --glass: rgba(10, 14, 26, 0.64);
+      --glass-strong: rgba(12, 16, 30, 0.78);
+      --glass-border: rgba(226, 214, 255, 0.15);
+      --gold-border: rgba(246, 204, 136, 0.48);
+      --text: #f7f5fc;
+      --muted: #a8b0c8;
+      --soft: #77819d;
+      --gold: #f5c982;
+      --gold-bright: #ffe1a8;
+      --iris: #9d84ff;
+      --cyan: #67e8f9;
+      --emerald: #4ce0b3;
+      --lime: #f5c982;
+      --highlight: #c4b5fd;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.62);
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, textarea, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 3px;
+    }
+
+    /* Full-Bleed Multi-Pass WebGL 3D World Canvas */
+    #spatial-world-stage {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 68%, #2a1f4a 0%, #090d1e 52%, #03050c 100%);
+    }
+    #apex-webgl-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+      touch-action: none;
+    }
+    #apex-webgl-canvas:active { cursor: grabbing; }
+
+    /* Projected 3D Spatial Callout Labels Overlay */
+    #spatial-callouts-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .spatial-node-callout {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      border: 0;
+      padding: 6px 10px;
+      transition: transform 0.25s var(--ease), opacity 0.25s;
+    }
+    .spatial-node-callout:hover, .spatial-node-callout.active {
+      transform: translate(-50%, -50%) scale(1.08);
+    }
+    .spatial-node-callout .node-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 14px 4px rgba(135, 180, 255, 0.9), 0 0 28px 8px rgba(245, 201, 130, 0.55);
+      border: 2px solid var(--gold-bright);
+    }
+    .spatial-node-callout .node-tag {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #f8f6ff;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
+      background: rgba(8, 11, 22, 0.52);
+      backdrop-filter: blur(8px);
+      padding: 4px 9px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      white-space: nowrap;
+    }
+    .spatial-node-callout.active .node-tag {
+      border-color: var(--gold);
+      color: var(--gold-bright);
+      box-shadow: 0 0 18px rgba(245, 201, 130, 0.35);
+    }
+    .spatial-node-callout .node-sub {
+      font-size: 10px;
+      color: #cbd5e1;
+      text-shadow: 0 2px 8px #000;
+      max-width: 140px;
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    /* Main Application Shell Overlay */
+    #authenticated-shell {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 208px minmax(0, 1fr);
+      pointer-events: none;
+    }
+    #authenticated-shell button,
+    #authenticated-shell input,
+    #authenticated-shell textarea,
+    #authenticated-shell select,
+    #authenticated-shell a,
+    #authenticated-shell details,
+    .glass-interactive {
+      pointer-events: auto;
+    }
+
+    /* Left Frosted Glass Navigation Rail (Matches References A, B, C, D) */
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 26px 16px 20px;
+      background: linear-gradient(180deg, rgba(7, 10, 20, 0.76) 0%, rgba(8, 11, 22, 0.58) 100%);
+      backdrop-filter: blur(24px);
+      border-right: 1px solid rgba(255, 255, 255, 0.09);
+      pointer-events: auto;
+      z-index: 25;
+    }
+    .rail-brand {
+      padding: 0 8px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      text-align: left;
+      background: none;
+      border-top: 0;
+      border-left: 0;
+      border-right: 0;
+    }
+    .rail-brand-title {
+      font-family: Georgia, "Playfair Display", serif;
+      font-size: 26px;
+      font-weight: 400;
+      letter-spacing: 0.18em;
+      color: #fff;
+      display: block;
+    }
+    .rail-brand-sub {
+      font-size: 8.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: block;
+      margin-top: 5px;
+      line-height: 1.45;
+    }
+    .rail-nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 18px 0 auto;
+    }
+    .rail-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #b4bcd4;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      transition: all 0.25s var(--ease);
+      position: relative;
+    }
+    .rail-btn svg {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.7;
+      flex-shrink: 0;
+    }
+    .rail-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+    }
+    .rail-btn.active {
+      background: linear-gradient(90deg, rgba(245, 201, 130, 0.22) 0%, rgba(157, 132, 255, 0.08) 100%);
+      border-color: rgba(245, 201, 130, 0.42);
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 0 14px rgba(245, 201, 130, 0.12);
+    }
+    .rail-btn.active::before {
+      content: "";
+      position: absolute;
+      left: -16px;
+      top: 10px;
+      bottom: 10px;
+      width: 3px;
+      border-radius: 4px;
+      background: var(--gold);
+      box-shadow: 0 0 10px var(--gold);
+    }
+    .rail-orb-card {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: linear-gradient(145deg, rgba(18, 23, 42, 0.72), rgba(9, 12, 24, 0.82));
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .orb-sphere {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 30%, #ffffff 0%, #99e6ff 28%, #5e43d8 68%, #090d1c 100%);
+      box-shadow: 0 0 18px rgba(135, 168, 255, 0.65), inset 0 0 8px rgba(255, 255, 255, 0.8);
+      flex-shrink: 0;
+    }
+    .rail-orb-card span {
+      font-size: 12px;
+      line-height: 1.35;
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+
+    /* Right Main Viewport Column */
+    .main {
+      position: relative;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 100vh;
+    }
+
+    /* Top Floating Command Bar & Operator Profile (Matches References A-D) */
+    .topbar {
+      height: 76px;
+      padding: 14px 32px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 20;
+    }
+    .top-command-pill {
+      margin: 0 auto;
+      width: min(500px, 46vw);
+      height: 46px;
+      border-radius: 999px;
+      background: rgba(11, 15, 28, 0.68);
+      backdrop-filter: blur(22px);
+      border: 1px solid rgba(226, 214, 255, 0.2);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+      display: flex;
+      align-items: center;
+      padding: 0 14px 0 8px;
+      gap: 12px;
+      pointer-events: auto;
+      cursor: text;
+      transition: border-color 0.25s;
+    }
+    .top-command-pill:hover, .top-command-pill:focus-within {
+      border-color: var(--gold-border);
+    }
+    .top-command-pill input {
+      flex: 1;
+      background: transparent;
+      border: 0;
+      outline: 0;
+      color: #f8fafc;
+      font-size: 13px;
+    }
+    .top-command-pill .kbd-badge {
+      font-size: 11px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+    .top-right-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .ctrl-pill {
+      height: 34px;
+      padding: 0 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(10, 14, 26, 0.66);
+      backdrop-filter: blur(16px);
+      color: #e2e8f0;
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: 0.2s;
+    }
+    .ctrl-pill:hover {
+      border-color: var(--gold-border);
+      color: #fff;
+    }
+    .ctrl-pill.danger {
+      border-color: rgba(251, 113, 133, 0.35);
+      color: #fecdd3;
+    }
+    .ctrl-pill.danger.halted {
+      background: rgba(225, 29, 72, 0.35);
+      border-color: #fb7185;
+      color: #fff;
+    }
+    .profile-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 12px 4px 4px;
+      border-radius: 999px;
+      background: rgba(10, 14, 26, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(16px);
+    }
+    .profile-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f5c982, #7c65e8);
+      color: #090d1c;
+      font-weight: 800;
+      font-size: 13px;
+      display: grid;
+      place-items: center;
+    }
+    .profile-greeting {
+      font-size: 11px;
+      line-height: 1.25;
+      color: var(--muted);
+    }
+    .profile-greeting strong {
+      display: block;
+      color: #fff;
+      font-size: 12px;
+    }
+
+    /* Page Stage Container */
+    .page {
+      flex: 1;
+      padding: 12px 32px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .page-enter {
+      animation: pageFadeIn 0.55s var(--ease) both;
+    }
+    @keyframes pageFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 3-Zone Spatial Grid (Left Editorial / Center 3D Window / Right Inspector Stack) */
+    .spatial-3col {
+      display: grid;
+      grid-template-columns: minmax(290px, 370px) minmax(240px, 1fr) minmax(320px, 385px);
+      gap: 20px;
+      align-items: start;
+      flex: 1;
+    }
+    .left-hero-zone {
+      padding-top: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .eyebrow {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: #cbd5e1;
+    }
+    .serif-hero {
+      font-family: Georgia, "Playfair Display", "Times New Roman", serif;
+      font-size: clamp(44px, 4.6vw, 72px);
+      font-weight: 400;
+      line-height: 1.03;
+      letter-spacing: -0.03em;
+      margin: 4px 0 6px;
+      color: #ffffff;
+      text-shadow: 0 12px 36px rgba(0, 0, 0, 0.75);
+    }
+    .hero-sub {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      margin: 0;
+      max-width: 340px;
+      text-shadow: 0 4px 18px rgba(0, 0, 0, 0.8);
+    }
+    .gold-pill-btn {
+      align-self: flex-start;
+      margin-top: 6px;
+      padding: 13px 24px;
+      border-radius: 999px;
+      border: 1px solid var(--gold-border);
+      background: linear-gradient(135deg, rgba(30, 26, 42, 0.82), rgba(16, 18, 32, 0.92));
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 0 28px rgba(245, 201, 130, 0.22), inset 0 0 14px rgba(245, 201, 130, 0.14);
+      transition: transform 0.25s var(--ease), box-shadow 0.25s;
+    }
+    .gold-pill-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 38px rgba(245, 201, 130, 0.4), inset 0 0 18px rgba(245, 201, 130, 0.24);
+    }
+    .gold-solid-btn {
+      padding: 11px 20px;
+      border-radius: 999px;
+      border: 1px solid #ffe4b5;
+      background: linear-gradient(135deg, #f7d294 0%, #d9a45b 100%);
+      color: #12131f;
+      font-size: 12.5px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 24px rgba(245, 201, 130, 0.32);
+    }
+
+    /* Right Inspector Stack & Frosted Glass Cards */
+    .right-inspector-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      pointer-events: auto;
+    }
+    .glass-card {
+      background: linear-gradient(155deg, rgba(14, 19, 36, 0.72), rgba(8, 11, 22, 0.82));
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(226, 214, 255, 0.15);
+      border-radius: 20px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+    }
+    .card-kicker-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .card-serif-title {
+      font-family: Georgia, "Playfair Display", serif;
+      font-size: 22px;
+      font-weight: 400;
+      margin: 0 0 6px;
+      color: #fff;
+    }
+    .progress-track {
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.09);
+      overflow: hidden;
+      margin: 10px 0 14px;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #67e8f9 0%, #9d84ff 65%, #f5c982 100%);
+      box-shadow: 0 0 16px rgba(157, 132, 255, 0.7);
+    }
+    .metric-3col {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .metric-3col strong {
+      display: block;
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .metric-3col small {
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    /* Circular SVG Gauge + Readiness Bars */
+    .readiness-grid {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    .gauge-wrap {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      display: grid;
+      place-items: center;
+    }
+    .gauge-wrap svg {
+      width: 96px;
+      height: 96px;
+      transform: rotate(-90deg);
+    }
+    .gauge-center {
+      position: absolute;
+      text-align: center;
+    }
+    .gauge-center strong {
+      font-family: Georgia, serif;
+      font-size: 28px;
+      font-weight: 400;
+      display: block;
+      line-height: 1;
+    }
+    .gauge-center small {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .mini-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .mini-bar-row {
+      display: grid;
+      grid-template-columns: 112px 1fr 24px;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: #d1d5db;
+    }
+    .mini-bar-track {
+      height: 4px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+    }
+    .mini-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4ce0b3, #67e8f9);
+    }
+
+    /* Activity Timeline */
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+    .activity-item {
+      display: grid;
+      grid-template-columns: 20px 1fr auto;
+      gap: 10px;
+      align-items: start;
+      font-size: 12px;
+      color: #e2e8f0;
+    }
+    .activity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 10px var(--emerald);
+      margin-top: 5px;
+    }
+    .activity-time {
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    /* Bottom Floating Composer Dock (Matches References A, B, C) */
+    .bottom-dock-wrap {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      padding-top: 10px;
+      z-index: 20;
+    }
+    .composer-dock {
+      margin: 0 auto;
+      width: min(650px, 60vw);
+      background: linear-gradient(155deg, rgba(14, 18, 34, 0.78), rgba(8, 10, 20, 0.88));
+      backdrop-filter: blur(26px);
+      border: 1px solid rgba(226, 214, 255, 0.22);
+      border-radius: 24px;
+      padding: 12px 16px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+      pointer-events: auto;
+    }
+    .composer-main-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .composer-input-col {
+      flex: 1;
+      min-width: 0;
+    }
+    .composer-input-col input {
+      width: 100%;
+      background: transparent;
+      border: 0;
+      outline: 0;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 400;
+    }
+    .composer-input-col small {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .composer-send-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--gold-border);
+      background: radial-gradient(circle at 30% 30%, rgba(245, 201, 130, 0.32), rgba(20, 24, 42, 0.9));
+      color: var(--gold-bright);
+      font-size: 16px;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 20px rgba(245, 201, 130, 0.25);
+    }
+    .composer-quick-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .quick-pill {
+      font-size: 11px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      background: rgba(255, 255, 255, 0.04);
+      color: #cbd5e1;
+      transition: 0.2s;
+    }
+    .quick-pill:hover {
+      border-color: var(--gold-border);
+      color: #fff;
+      background: rgba(245, 201, 130, 0.12);
+    }
+
+    /* Opportunity Atlas Specific List & Cards (Reference C) */
+    .filter-pills-row {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+    .filter {
+      font-size: 11.5px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(12, 16, 30, 0.65);
+      color: #cbd5e1;
+    }
+    .filter.active {
+      border-color: var(--gold);
+      background: rgba(245, 201, 130, 0.18);
+      color: var(--gold-bright);
+    }
+    .job-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 410px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .job {
+      width: 100%;
+      text-align: left;
+      display: grid;
+      grid-template-columns: 38px 1fr auto;
+      gap: 11px;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(12, 16, 30, 0.68);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      transition: 0.22s var(--ease);
+    }
+    .job:hover, .job.selected {
+      border-color: var(--gold-border);
+      background: linear-gradient(135deg, rgba(32, 28, 48, 0.82), rgba(14, 18, 34, 0.88));
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+    .job-monogram {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.92);
+      color: #0b0f1d;
+      font-weight: 800;
+      font-size: 14px;
+      display: grid;
+      place-items: center;
+    }
+    .job h4 { margin: 0 0 3px; font-size: 13.5px; font-weight: 600; color: #fff; }
+    .job small { font-size: 11px; color: var(--muted); display: block; }
+
+    /* Resume Studio Dimensional Glass Monolith (Reference D) */
+    .resume-3col {
+      display: grid;
+      grid-template-columns: minmax(250px, 310px) minmax(380px, 1fr) minmax(300px, 360px);
+      gap: 18px;
+      align-items: center;
+      flex: 1;
+    }
+    .monolith-stage {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      pointer-events: auto;
+    }
+    .monolith-tool-dock {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      border-radius: 16px;
+      background: rgba(10, 14, 26, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(18px);
+      margin-right: -14px;
+      z-index: 5;
+    }
+    .monolith-tool-dock button {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 0;
+      background: rgba(255, 255, 255, 0.05);
+      color: #e2e8f0;
+      font-size: 13px;
+    }
+    .monolith-tool-dock button:hover { background: rgba(245, 201, 130, 0.22); color: var(--gold-bright); }
+    .glass-monolith-frame {
+      padding: 14px;
+      border-radius: 26px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(165, 180, 255, 0.08) 50%, rgba(245, 201, 130, 0.25) 100%);
+      border: 2px solid rgba(255, 240, 210, 0.48);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), 0 0 50px rgba(157, 132, 255, 0.28), inset 0 0 24px rgba(255, 255, 255, 0.25);
+      transform: perspective(1400px) rotateY(-6deg) rotateX(1.5deg);
+      transition: transform 0.45s var(--ease);
+      max-width: 520px;
+      width: 100%;
+    }
+    .glass-monolith-frame:hover {
+      transform: perspective(1400px) rotateY(-1.5deg) rotateX(0.5deg) scale(1.01);
+    }
+    .paper {
+      background: linear-gradient(180deg, #f8fafc 0%, #eef2f9 100%);
+      color: #161b2e;
+      border-radius: 16px;
+      padding: 26px 28px;
+      min-height: 460px;
+      box-shadow: inset 0 1px 0 #fff;
+    }
+    .paper-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid #d8dee9;
+      padding-bottom: 12px;
+    }
+    .paper h3 {
+      font-family: Georgia, serif;
+      font-size: 24px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      margin: 0 0 4px;
+      color: #0f172a;
+    }
+    .paper-role {
+      font-size: 13px;
+      color: #334155;
+      margin: 0;
+    }
+    .paper h4 {
+      font-size: 9.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #475569;
+      margin: 14px 0 6px;
+    }
+    .paper p, .paper li {
+      font-size: 11px;
+      line-height: 1.55;
+      color: #334155;
+      margin: 0 0 5px;
+    }
+    .quant-pill {
+      background: rgba(245, 185, 90, 0.28);
+      color: #7c4a03;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .versions-dock {
+      margin: 8px auto 0;
+      width: min(820px, 82vw);
+      background: rgba(10, 14, 26, 0.76);
+      backdrop-filter: blur(22px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 18px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .version-tab {
+      padding: 7px 12px;
+      border-radius: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.03);
+      text-align: left;
+      font-size: 11px;
+    }
+    .version-tab.active {
+      border-color: var(--gold);
+      background: rgba(245, 201, 130, 0.14);
+    }
+
+    /* Command Palette & Live Backend Drawer */
+    .palette-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 5, 12, 0.76);
+      backdrop-filter: blur(14px);
+      z-index: 120;
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 14vh 16px 0;
+    }
+    .palette-backdrop.open { display: flex; }
+    .palette {
+      width: min(580px, 100%);
+      border-radius: 22px;
+      border: 1px solid var(--gold-border);
+      background: #101528;
+      box-shadow: 0 35px 120px #000;
+      overflow: hidden;
+    }
+    .palette input {
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      background: transparent;
+      padding: 20px 22px;
+      color: #fff;
+      font-size: 16px;
+      outline: 0;
+    }
+    .palette-items { max-height: 340px; overflow-y: auto; padding: 10px; }
+    .palette-items button {
+      width: 100%;
+      padding: 12px 14px;
+      border: 0;
+      border-radius: 11px;
+      background: transparent;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      text-align: left;
+      font-size: 13px;
+    }
+    .palette-items button:hover { background: rgba(245, 201, 130, 0.16); color: #fff; }
+
+    .live-ops-drawer {
+      margin: 8px 32px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      background: rgba(8, 11, 22, 0.72);
+      backdrop-filter: blur(18px);
+      padding: 10px 18px;
+      z-index: 20;
+    }
+    .live-ops-drawer summary {
+      cursor: pointer;
+      font-size: 10.5px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      list-style: none;
+    }
+    .live-ops-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .ops-box {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(4, 6, 14, 0.65);
+    }
+    .ops-box h4 { margin: 0 0 6px; font-size: 11px; color: var(--gold); }
+    .ops-box input, .ops-box textarea {
+      width: 100%;
+      background: #060914;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
+    #auth-gate-container {
+      position: relative;
+      z-index: 30;
+      max-width: 920px;
+      margin: 48px auto;
+      padding: 32px;
+      border-radius: 26px;
+      border: 1px solid var(--gold-border);
+      background: rgba(10, 14, 28, 0.88);
+      backdrop-filter: blur(28px);
+      box-shadow: var(--shadow);
+    }
+    .auth-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .auth-card {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 16px;
+      padding: 16px;
+      background: rgba(5, 8, 18, 0.7);
+    }
+    .auth-card input {
+      width: 100%;
+      margin-top: 5px;
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: #050811;
+    }
+
+    .toasts { position: fixed; right: 24px; bottom: 24px; z-index: 160; pointer-events: none; }
+    .toast {
+      background: rgba(16, 22, 42, 0.92);
+      border: 1px solid var(--gold-border);
+      border-radius: 14px;
+      padding: 13px 18px;
+      color: #fff;
+      font-size: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    .light {
+      --bg: #eef1f8;
+      --text: #141b2d;
+      --muted: #4b5568;
+    }
+    .light .glass-card, .light .rail, .light .composer-dock {
+      background: rgba(255, 255, 255, 0.82);
+      color: #141b2d;
+      border-color: rgba(30, 41, 59, 0.15);
+    }
+    .light .serif-hero, .light .card-serif-title, .light .rail-brand-title { color: #0f172a; text-shadow: none; }
+
+    @media (max-width: 1100px) {
+      .spatial-3col, .resume-3col { grid-template-columns: 1fr; }
+      #spatial-callouts-layer { display: none; }
+    }
+    @media (max-width: 680px) {
+      #authenticated-shell { grid-template-columns: 1fr; }
+      .rail {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 66px;
+        flex-direction: row;
+        padding: 6px 10px;
+        z-index: 50;
+      }
+      .rail-brand, .rail-orb-card { display: none; }
+      .rail-nav-list { flex-direction: row; margin: 0; width: 100%; justify-content: space-around; }
+      .rail-btn { width: auto; padding: 8px 10px; font-size: 11px; }
+      .rail-btn span { display: none; }
+      .topbar { padding: 10px 14px 0; }
+      .top-command-pill { width: 180px; }
+      .page { padding: 10px 14px 80px; }
+      .composer-dock { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Full-Bleed Multi-Pass WebGL 3D World -->
+  <div id="spatial-world-stage">
+    <canvas id="apex-webgl-canvas" role="img" aria-label="APEX V7 Infinity Interactive 3D Spatial World. Drag to orbit; scroll wheel to zoom; click spatial nodes to inspect."></canvas>
+  </div>
+
+  <!-- Projected 3D Spatial Callout Labels Overlay -->
+  <div id="spatial-callouts-layer" aria-label="3D Spatial Callout Nodes"></div>
+
+  <!-- Persistent Connection Mode Status Label -->
+  <div id="global-connection-strip" style="position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:55;pointer-events:none;font-size:9.5px;letter-spacing:0.14em;color:#cbd5e1;background:rgba(6,9,20,0.72);padding:3px 10px;border-radius:99px;border:1px solid rgba(255,255,255,0.12);">
+    <span id="connection-mode-label">INTERACTIVE EXPERIENCE · V7 INFINITY SHOWCASE</span>
+  </div>
+
+  <!-- P0 Zero-Impersonation Out-of-Band Authentication Gate -->
+  <section id="auth-gate-container" style="display:none;" aria-label="Zero-Impersonation Authentication Gate">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div class="eyebrow">APEX GENESIS V7 INFINITY · ZERO-IMPERSONATION SECURITY GATE</div>
+        <h2 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:8px 0;">Verify identity or launch <span style="color:var(--gold);">V7 Infinity Showcase.</span></h2>
+        <p style="color:var(--muted);font-size:13px;margin:0;">Registration never leaks a verification token in the HTTP response. Verify via out-of-band challenge or open the V7 Showcase immediately.</p>
+      </div>
+      <button type="button" class="gold-solid-btn" id="btn-enter-showcase" onclick="enterInteractiveShowcaseMode()">✨ Open V7 Infinity Showcase →</button>
+    </div>
+    <div id="auth-status-msg" style="margin-top:12px;padding:9px 12px;border-radius:10px;border:1px solid var(--gold-border);font-size:12px;color:var(--gold-bright);">Ready for out-of-band verification or V7 Showcase preview.</div>
+    <div class="auth-grid">
+      <div class="auth-card">
+        <h4>1. Register Candidate</h4>
+        <input id="auth-email" type="email" value="operator@apex-genesis.io">
+        <input id="auth-name" type="text" value="Taylor Chen">
+        <input id="auth-password" type="password" value="ApexResurrection#2026">
+        <button type="button" class="gold-pill-btn" id="btn-register" onclick="submitRegistration()" style="width:100%;justify-content:center;">1. Register Account →</button>
+      </div>
+      <div class="auth-card">
+        <h4>2. Out-of-Band Challenge</h4>
+        <input id="auth-challenge-token" type="text" value="" placeholder="Fetch from OOB mailbox...">
+        <button type="button" class="ctrl-pill" id="btn-fetch-oob-dev" onclick="fetchDevOutOfBandMailbox()" style="width:100%;justify-content:center;margin-bottom:8px;">Retrieve Dev OOB Token</button>
+        <button type="button" class="gold-pill-btn" id="btn-verify-challenge" onclick="submitEmailVerificationChallenge()" style="width:100%;justify-content:center;">Verify Email Token →</button>
+      </div>
+      <div class="auth-card">
+        <h4>3. Session Sign-In (HttpOnly)</h4>
+        <p style="font-size:11.5px;color:var(--muted);">Issues an <code>HttpOnly; SameSite=Strict</code> session cookie with zero localStorage tokens.</p>
+        <button type="button" class="gold-solid-btn" id="btn-login" onclick="submitLogin()" style="width:100%;justify-content:center;">2. Sign In (Verified Only) →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main V7 Infinity Spatial Operating System Shell -->
+  <div id="authenticated-shell" style="display:grid;">
+    <nav class="rail" aria-label="Primary navigation">
+      <div>
+        <button class="rail-brand" id="logoBtn" aria-label="APEX Home">
+          <span class="rail-brand-title">APEX</span>
+          <span class="rail-brand-sub">YOUR AI CAREER<br>OPERATING SYSTEM</span>
+        </button>
+        <div class="rail-nav-list">
+          <button class="rail-btn active" data-view="home" data-workspace="mission-control" id="nav-ws-01">
+            <svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9H3z"/><path d="M9 20v-6h6v6"/></svg>
+            <span>Mission Control</span>
+          </button>
+          <button class="rail-btn" data-view="neural" data-workspace="neural-core" id="nav-ws-03">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M4.9 4.9l2.8 2.8m8.6 8.6 2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8"/></svg>
+            <span>Neural Core</span>
+          </button>
+          <button class="rail-btn" data-view="neural" data-workspace="ai-command-center" id="nav-ws-02">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>Strategy</span>
+          </button>
+          <button class="rail-btn" data-view="resume" data-workspace="resume-studio" id="nav-ws-06">
+            <svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+            <span>Resume Studio</span>
+          </button>
+          <button class="rail-btn" data-view="jobs" data-workspace="opportunity-explorer" id="nav-ws-05">
+            <svg viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9Z"/></svg>
+            <span>Opportunities</span>
+          </button>
+          <button class="rail-btn" id="railPalette" aria-label="Open All 23 Workspaces">
+            <svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            <span>Intelligence (23)</span>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <button class="rail-btn" id="mobile-nav-toggle" onclick="palette(true)" style="padding:6px 10px;font-size:11px;margin-bottom:6px;">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          <span>All Workspaces</span>
+        </button>
+        <div class="rail-orb-card">
+          <div class="orb-sphere"></div>
+          <span>Higher<br>you ahead.</span>
+        </div>
+      </div>
+    </nav>
+
+    <main class="main" id="workspace-viewport">
+      <!-- Top Floating Command Bar & Operator Controls -->
+      <header class="topbar">
+        <div class="top-command-pill" id="cmdBtn" role="button" tabindex="0" aria-label="Open Command Bar">
+          <div class="orb-sphere" style="width:28px;height:28px;"></div>
+          <input id="topCommandInput" placeholder="Ask APEX anything..." readonly>
+          <span class="kbd-badge">⌘ K</span>
+        </div>
+
+        <div class="top-right-controls">
+          <span class="ctrl-pill" id="modeBadge" style="color:var(--gold-bright);border-color:var(--gold-border);">◈ SHOWCASE MODE</span>
+          <button class="ctrl-pill" id="motionBtn" title="Cycle Motion Mode (Immersive / Balanced / Reduced)">Motion: IMMERSIVE</button>
+          <button class="ctrl-pill" id="btn-toggle-webgl-fallback" title="Toggle WebGL 3D / Accessible 2D Fallback">3D / 2D</button>
+          <button class="ctrl-pill" id="resetCamBtn" title="Reset Camera Orbit">Reset View</button>
+          <button class="ctrl-pill" id="themeBtn" title="Switch Theme">☾</button>
+          <button class="ctrl-pill danger" id="btn-emergency-stop" onclick="handleEmergencyStopToggle()">EMERGENCY STOP: OFF</button>
+          <div class="profile-chip">
+            <div class="profile-avatar">T</div>
+            <div class="profile-greeting">
+              Good evening,
+              <strong id="operatorNameLabel">Taylor</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dynamic Workspace Overlay Stage -->
+      <section id="page" class="page" aria-live="polite"></section>
+
+      <!-- Live Backend Ledger & Verification Controls (Accessible for E2E & Live Mode) -->
+      <details class="live-ops-drawer" id="live-ops-details" open>
+        <summary>
+          <span>◈ V7 INFINITY SPATIAL ENGINE · <strong id="webgl-engine-status">WEBGL 3D WORLD ACTIVE · 60 FPS</strong> · Verified Facts: <strong id="stat-facts-count">0</strong> · Discovered Roles: <strong id="stat-jobs-count">0</strong> · Selected Node: <strong id="inspected-node-title">OPPORTUNITIES (Core Orbit)</strong></span>
+          <span>Live Backend Controls ↘</span>
+        </summary>
+        <div class="live-ops-grid">
+          <div class="ops-box">
+            <h4>1. Grounded Resume Ingestion</h4>
+            <input id="ingest-doc-title" type="text" value="Master Engineering Resume 2026">
+            <textarea id="ingest-raw-text" rows="2">Built distributed TypeScript microservices and Cloudflare Workers handling 45,000 req/s with SQLite D1 persistence and WebGL interfaces.</textarea>
+            <input id="ingest-fact-key" type="hidden" value="TypeScript &amp; Cloudflare Workers">
+            <input id="ingest-fact-val" type="hidden" value="45,000 req/s distributed systems">
+            <input id="ingest-fact-excerpt" type="text" value="Built distributed TypeScript microservices and Cloudflare Workers handling 45,000 req/s">
+            <button type="button" class="gold-solid-btn" id="btn-ingest-resume" onclick="handleBackendResumeIngestion()">Ingest &amp; Verify Excerpt →</button>
+          </div>
+          <div class="ops-box">
+            <h4>2. Vacancy Discovery (XSS-Sanitized)</h4>
+            <input id="discover-title" type="text" value="Staff AI Systems Architect">
+            <input id="discover-company" type="text" value="Cloudflare">
+            <input id="discover-url" type="text" value="https://boards.greenhouse.io/cloudflare/jobs/90112">
+            <input id="discover-skills" type="hidden" value="TypeScript, Distributed Systems, WebGL">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="gold-solid-btn" id="btn-discover-job" onclick="handleBackendJobDiscovery()">Submit Role (Unverified) →</button><button type="button" class="ctrl-pill" id="btn-discover-official" onclick="handleBackendOfficialJobDiscovery()">Fetch Official Feed (SOURCE_RETRIEVED) →</button></div>
+          </div>
+          <div class="ops-box">
+            <h4>3. 14-Stage Validated DAG Planner</h4>
+            <input id="live-objective-input" type="text" value="Discover matching remote TypeScript architecture roles and compile grounded resume">
+            <button type="button" class="gold-solid-btn" id="btn-execute-plan" onclick="handleBackendPlanExecution()">Execute 14-Stage Plan →</button>
+            <div id="plan-execution-status" style="margin-top:6px;font-size:10.5px;color:var(--emerald);"></div>
+          </div>
+        </div>
+      </details>
+    </main>
+  </div>
+
+  <!-- Command Palette Modal -->
+  <div id="paletteBackdrop" class="palette-backdrop">
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Command Palette">
+      <input id="paletteInput" placeholder="Search 4 V7 Spatial Worlds or all 23 Genesis Workspaces..." autocomplete="off">
+      <div id="paletteItems" class="palette-items"></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script>
+    'use strict';
+
+    const $ = (s) => document.querySelector(s);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const stripClientTags = (s) => String(s ?? '').replace(/<[^>]*>/g, '');
+
+    const views = {
+      home: 'Mission Control',
+      neural: 'Neural Core',
+      jobs: 'Opportunity Atlas',
+      resume: 'Resume Studio'
+    };
+
+    const state = {
+      view: 'home',
+      motionMode: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'REDUCED_MOTION' : 'IMMERSIVE',
+      motion: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      light: false,
+      force2DFallback: false,
+      filter: 'All',
+      search: '',
+      selected: 0,
+      selectedNodeIndex: 0,
+      measuredFps: 60,
+      lastRenderMode: 'WEBGL_3D',
+      editorName: 'TAYLOR CHEN',
+      editorRole: 'Senior Product Manager',
+      editorSummary: 'Product leader with 7+ years of experience building AI-powered consumer and enterprise products. Proven track record of turning ambiguity into high-impact solutions that scale globally.',
+      editorBullet1: 'Launched an AI-driven career platform serving 1M+ users, achieving 68% growth in 12 months.',
+      activeVersion: 'v3.2'
+    };
+
+    /* Scene-Specific 3D Spatial Callout Nodes Matching References A, B, and C */
+    const sceneSpatialNodes = {
+      home: [
+        { index: 0, label: 'OPPORTUNITIES', sub: '7 active matches', pos: [0.05, 1.55, 0.25] },
+        { index: 1, label: 'SKILLS', sub: '92% AI readiness', pos: [-1.52, 0.32, 0.45] },
+        { index: 2, label: 'NETWORK', sub: '5 warm intros', pos: [1.58, 0.42, 0.20] },
+        { index: 3, label: 'INTELLIGENCE', sub: 'Multi-agent core', pos: [-1.20, -0.78, 0.55] },
+        { index: 4, label: 'IMPACT', sub: '68% to target', pos: [1.18, -0.88, 0.48] }
+      ],
+      neural: [
+        { index: 0, label: 'PLAN', sub: 'From insight to strategy', pos: [-1.68, 0.62, 0.20] },
+        { index: 1, label: 'ANALYZE', sub: 'Turn complexity into clarity', pos: [-1.42, -0.58, 0.45] },
+        { index: 2, label: 'CREATE', sub: 'Generate assets that open doors', pos: [1.58, 0.88, 0.15] },
+        { index: 3, label: 'EXECUTE', sub: 'Take action in the real world', pos: [1.62, -0.52, 0.35] }
+      ],
+      jobs: [
+        { index: 0, label: 'SAN FRANCISCO', sub: '342 OPPORTUNITIES', pos: [-1.18, 0.85, 0.85] },
+        { index: 1, label: 'NEW YORK', sub: '276 OPPORTUNITIES', pos: [-0.28, 0.32, 1.48] },
+        { index: 2, label: 'LONDON', sub: '298 OPPORTUNITIES', pos: [0.95, 0.92, 0.92] },
+        { index: 3, label: 'DUBAI', sub: '189 OPPORTUNITIES', pos: [1.22, -0.18, 1.02] },
+        { index: 4, label: 'SINGAPORE', sub: '214 OPPORTUNITIES', pos: [0.55, -0.92, 1.15] }
+      ],
+      resume: []
+    };
+
+    const showcaseJobs = [
+      {
+        company: 'OpenAI',
+        monogram: '◎',
+        title: 'Senior Product Manager',
+        loc: 'Remote · San Francisco · New York',
+        type: 'Remote',
+        featured: true,
+        posted: '2d ago',
+        salary: '$240K – $310K · Equity',
+        verification_status: 'SHOWCASE_EXAMPLE',
+        details: 'Lead high-impact product initiatives that bring frontier AI research to real-world users. You will shape the roadmap, work cross-functionally, and help define how billions of people interact with AI.'
+      },
+      {
+        company: 'Anthropic',
+        monogram: 'AI',
+        title: 'Senior Product Manager',
+        loc: 'San Francisco · Hybrid',
+        type: 'Hybrid',
+        featured: false,
+        posted: '3d ago',
+        salary: '$235K – $300K · Equity',
+        verification_status: 'SHOWCASE_EXAMPLE',
+        details: 'Partner with safety and alignment researchers to ship reliable, steerable autonomous agent workflows for enterprise teams.'
+      },
+      {
+        company: 'Google DeepMind',
+        monogram: '◉',
+        title: 'Product Lead, AI Platform',
+        loc: 'London · Hybrid',
+        type: 'Hybrid',
+        featured: false,
+        posted: '4d ago',
+        salary: '£185K – £240K · Equity',
+        verification_status: 'SHOWCASE_EXAMPLE',
+        details: 'Architect next-generation multimodal developer platforms and reasoning APIs.'
+      },
+      {
+        company: 'Stripe',
+        monogram: 'S',
+        title: 'Senior Product Manager',
+        loc: 'Remote · Global',
+        type: 'Remote',
+        featured: false,
+        posted: '5d ago',
+        salary: '$215K – $275K',
+        verification_status: 'SHOWCASE_EXAMPLE',
+        details: 'Scale global programmable financial infrastructure and intelligent fraud-prevention systems.'
+      },
+      {
+        company: 'Microsoft',
+        monogram: '⊞',
+        title: 'Principal Product Manager',
+        loc: 'Seattle · Hybrid',
+        type: 'Hybrid',
+        featured: false,
+        posted: '1w ago',
+        salary: '$220K – $285K',
+        verification_status: 'SHOWCASE_EXAMPLE',
+        details: 'Drive Copilot workspace extensibility and multi-agent orchestration.'
+      }
+    ];
+
+    let isLiveBackendAvailable = false;
+    let isShowcaseMode = true;
+    let inMemorySessionToken = '';
+    let inMemoryCsrfToken = '';
+    let currentEmergencyStopped = false;
+    let apiInFlight = 0;
+    let worldRenderer = null;
+    let toastTimer = 0;
+
+    let liveState = {
+      user: null,
+      facts: [],
+      jobs: [],
+      plans: [],
+      tasks: [],
+      documents: [],
+      resumeVersions: [],
+      resourceGuardian: { emergencyStopped: false, d1Quota: { dailyRowsWritten: 0, maxDailyRowsWritten: 100000 } }
+    };
+
+    function notify(msg) {
+      const box = $('#toasts');
+      if (!box) return;
+      box.innerHTML = `<div class="toast">${esc(msg)}</div>`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { box.innerHTML = ''; }, 3800);
+    }
+
+    function getActiveJobsList() {
+      if (!isShowcaseMode && Array.isArray(liveState.jobs) && liveState.jobs.length > 0) {
+        return liveState.jobs.map((j) => ({
+          company: j.company_name || j.company || 'Organization',
+          monogram: String(j.company_name || 'O').slice(0, 2).toUpperCase(),
+          title: j.title || 'Role',
+          loc: j.location || j.remote_status || 'Remote',
+          type: j.remote_status === 'HYBRID' ? 'Hybrid' : j.remote_status === 'ONSITE' ? 'On-site' : 'Remote',
+          featured: j.verification_status === 'VERIFIED',
+          posted: 'Live',
+          salary: j.salary_max_usd ? `$${Number(j.salary_min_usd || 175000).toLocaleString()} – $${Number(j.salary_max_usd).toLocaleString()}` : 'Compensation not verified',
+          verification_status: j.verification_status || 'USER_SUPPLIED_UNVERIFIED',
+          details: j.description_text || `Discovered via ${j.source_feed || 'Operator Submission'}. Provenance: ${j.verification_status || 'USER_SUPPLIED_UNVERIFIED'}.`
+        }));
+      }
+      if (!isShowcaseMode) return [];
+      return showcaseJobs;
+    }
+
+    /* ============================================================================
+     * REFERENCE A: MISSION CONTROL (apex_mission_control_dashboard.png)
+     * ============================================================================ */
+    function frameHome() {
+      const isLive = !isShowcaseMode && liveState.user;
+      const factsCount = isLive ? (liveState.facts || []).length : 3;
+      const jobsCount = isLive ? (liveState.jobs || []).length : 7;
+      const plansCount = isLive ? (liveState.plans || []).length : 12;
+      const progressPct = isLive ? Math.min(100, factsCount * 25 + jobsCount * 15) : 68;
+      const readinessScore = isLive ? Math.min(100, factsCount * 30 + 32) : 92;
+
+      return `
+        <div class="spatial-3col">
+          <!-- Left Editorial Hero Overlay -->
+          <div class="left-hero-zone">
+            <div class="eyebrow">MISSION CONTROL</div>
+            <h1 class="serif-hero">A higher<br>career orbit.</h1>
+            <p class="hero-sub">Strategize. Build. Move.<br>With AI by your side.</p>
+            <button type="button" class="gold-pill-btn" data-go="jobs">
+              <span>Continue your mission</span>
+              <span>→</span>
+            </button>
+
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+              ${(sceneSpatialNodes.home || []).map((n) => `
+                <button type="button" class="quick-pill ${state.selectedNodeIndex === n.index ? 'active' : ''}" data-node-index="${n.index}">
+                  ✦ ${esc(n.label)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Center Open 3D Spatial Viewport Window -->
+          <div style="min-height:420px;pointer-events:none;"></div>
+
+          <!-- Right 3-Card Translucent Glass Inspector Stack -->
+          <aside class="right-inspector-stack" aria-label="Mission Inspector">
+            <div class="glass-card">
+              <div class="card-kicker-row">
+                <span>YOUR MISSION</span>
+                <span>${isLive ? 'LIVE SESSION' : 'Q1 2025 · SHOWCASE'}</span>
+              </div>
+              <h3 class="card-serif-title">${isLive ? 'Execute Autonomous Career Plan' : 'Land a Senior Product Role'}</h3>
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1;">
+                <span>You're <strong>${progressPct}%</strong> to target. Momentum is strong.</span>
+                <strong>${progressPct}%</strong>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" style="width:${progressPct}%;"></div>
+              </div>
+              <div class="metric-3col">
+                <div>
+                  <strong>${factsCount}</strong>
+                  <small>${isLive ? 'Verified facts' : 'Key milestones'}</small>
+                </div>
+                <div>
+                  <strong>${jobsCount}</strong>
+                  <small>Active opportunities</small>
+                </div>
+                <div>
+                  <strong>${isLive ? `${plansCount} Plans` : '12 Weeks'}</strong>
+                  <small>${isLive ? 'Executed DAGs' : 'Target timeline'}</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-kicker-row">
+                <span>AI READINESS</span>
+                <span style="color:var(--emerald);background:rgba(76,224,179,0.12);padding:3px 8px;border-radius:99px;border:1px solid rgba(76,224,179,0.3);">✦ ${isLive ? 'GROUNDED' : 'EXCELLENT'}</span>
+              </div>
+              <div class="readiness-grid">
+                <div class="gauge-wrap">
+                  <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="none"/>
+                    <circle cx="50" cy="50" r="40" stroke="#4ce0b3" stroke-width="8" fill="none" stroke-dasharray="251.2" stroke-dashoffset="${(251.2 * (100 - readinessScore) / 100).toFixed(1)}" stroke-linecap="round"/>
+                  </svg>
+                  <div class="gauge-center">
+                    <strong>${readinessScore}</strong>
+                    <small>/100</small>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size:12.5px;font-weight:600;margin-bottom:8px;">You're AI-augmented and ahead of the curve.</div>
+                  <div class="mini-bars">
+                    <div class="mini-bar-row"><span>AI Skills</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:90%"></div></div><span>90</span></div>
+                    <div class="mini-bar-row"><span>Tooling &amp; Workflow</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:95%"></div></div><span>95</span></div>
+                    <div class="mini-bar-row"><span>Market Alignment</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:88%"></div></div><span>88</span></div>
+                    <div class="mini-bar-row"><span>Execution Consistency</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:94%"></div></div><span>94</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-kicker-row">
+                <span>CURRENT ACTIVITY</span>
+                <span style="color:var(--emerald);">● ${isLive ? 'Live Ledger' : 'Showcase'}</span>
+              </div>
+              <div class="activity-list">
+                <div class="activity-item">
+                  <span class="activity-dot"></span>
+                  <span>APEX is analyzing ${jobsCount} Senior Product opportunities for your profile...</span>
+                  <span class="activity-time">2 min ago</span>
+                </div>
+                <div class="activity-item">
+                  <span class="activity-dot" style="background:var(--cyan);"></span>
+                  <span>Tailoring your grounded resume claims with SHA-256 excerpt proof</span>
+                  <span class="activity-time">12 min ago</span>
+                </div>
+                <div class="activity-item">
+                  <span class="activity-dot" style="background:var(--gold);"></span>
+                  <span>Summarized key takeaways from interview prep &amp; 14-stage DAG</span>
+                  <span class="activity-time">1 hr ago</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Bottom Floating Composer Dock -->
+        <div class="bottom-dock-wrap">
+          <div style="width:180px;"></div>
+          <div class="composer-dock">
+            <div class="composer-main-row">
+              <div class="orb-sphere"></div>
+              <div class="composer-input-col">
+                <input id="homeComposerInput" placeholder="What's next for you?" aria-label="Mission Objective Composer">
+                <small>Plan. Create. Analyze. Take action.</small>
+              </div>
+              <button type="button" class="composer-send-btn" id="homeComposerSend" title="Dispatch Objective">→</button>
+            </div>
+          </div>
+          <div style="width:190px;text-align:right;font-size:11.5px;color:#cbd5e1;font-style:italic;text-shadow:0 2px 10px #000;">
+            “A more intentional you,<br>a bigger tomorrow.”
+          </div>
+        </div>
+      `;
+    }
+
+    /* ============================================================================
+     * REFERENCE B: NEURAL CORE (apex_neural_core_from_thought_to_tomorrow.png)
+     * ============================================================================ */
+    function frameNeural() {
+      const isLive = !isShowcaseMode && liveState.user;
+      const latestPlan = Array.isArray(liveState.plans) && liveState.plans.length > 0 ? liveState.plans[0] : null;
+
+      return `
+        <div class="spatial-3col">
+          <!-- Left Column: Editorial Headline + Live Reasoning Trace Card -->
+          <div class="left-hero-zone">
+            <div class="eyebrow">NEURAL CORE</div>
+            <h1 class="serif-hero">From thought<br>to what’s next.</h1>
+            <p class="hero-sub">A multi-agent intelligence system that reasons, plans, and takes action for your career.</p>
+
+            <div class="glass-card" style="margin-top:8px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <div class="orb-sphere" style="width:26px;height:26px;"></div>
+                <strong style="font-size:13px;">APEX</strong>
+                <span style="font-size:11px;color:var(--muted);">${isLive ? 'Live Planner' : '2m ago · Showcase'}</span>
+              </div>
+              <p style="font-size:12.5px;line-height:1.55;color:#e2e8f0;margin:0 0 12px;" id="neuralAnswer">
+                ${latestPlan
+                  ? `Executed Live Plan <strong>${esc(latestPlan.id)}</strong>: “${esc(latestPlan.objective)}” (${(liveState.tasks || []).length} tasks).`
+                  : `I've analyzed your goal to land a Senior Product role. Here's the strategic plan, key insights, and next steps.`}
+              </p>
+              <div class="activity-list">
+                <div class="activity-item">
+                  <span class="activity-dot"></span>
+                  <div><strong>Reasoning</strong><div style="font-size:11px;color:var(--muted);">Analyzing market, verified skills, and opportunities...</div></div>
+                  <span>✓</span>
+                </div>
+                <div class="activity-item">
+                  <span class="activity-dot" style="background:var(--iris);box-shadow:0 0 10px var(--iris);"></span>
+                  <div><strong>Researching</strong><div style="font-size:11px;color:var(--muted);">Scanning roles, company signals, and provenance...</div></div>
+                  <span>◉</span>
+                </div>
+                <div class="activity-item">
+                  <span class="activity-dot" style="background:rgba(255,255,255,0.25);box-shadow:none;"></span>
+                  <div><strong>Planning</strong><div style="font-size:11px;color:var(--muted);">Constructing 14-stage validated DAG action plan...</div></div>
+                  <span>○</span>
+                </div>
+                <div class="activity-item">
+                  <span class="activity-dot" style="background:rgba(255,255,255,0.25);box-shadow:none;"></span>
+                  <div><strong>Preparing actions</strong><div style="font-size:11px;color:var(--muted);">Generating grounded resume &amp; outreach assets...</div></div>
+                  <span>○</span>
+                </div>
+              </div>
+              <div style="margin-top:12px;padding:9px 12px;border-radius:12px;border:1px solid rgba(157,132,255,0.35);background:rgba(157,132,255,0.1);display:flex;justify-content:space-between;align-items:center;font-size:11.5px;">
+                <span>✦ ${isLive ? '14-Stage Planner Ready' : 'Synthesizing insights...'}</span>
+                <span style="letter-spacing:2px;color:var(--cyan);">▮▯▮▮</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Center Open 3D Spatial Viewport Window (Biosphere + 4 Floating Waterfall Sky-Islands) -->
+          <div style="min-height:420px;pointer-events:none;"></div>
+
+          <!-- Right Column: AGENT STATES + MODEL & TOOLS Cards -->
+          <aside class="right-inspector-stack" aria-label="Agent Fleet & Model Readiness">
+            <div class="glass-card">
+              <div class="card-kicker-row">
+                <span>AGENT STATES</span>
+                <span style="color:var(--emerald);">4 ACTIVE ●</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:9px;">
+                <button type="button" class="job" onclick="select3DNodeByIndex(0)">
+                  <div class="orb-sphere" style="width:32px;height:32px;"></div>
+                  <div><h4>Strategist</h4><small>Analyzing opportunities &amp; trajectory</small></div>
+                  <span style="color:var(--cyan);font-size:12px;">▮▮▯ ›</span>
+                </button>
+                <button type="button" class="job" onclick="select3DNodeByIndex(1)">
+                  <div class="job-monogram" style="background:rgba(157,132,255,0.2);color:#d8b4fe;border:1px solid rgba(157,132,255,0.4);">⌕</div>
+                  <div><h4>Researcher</h4><small>Scanning market &amp; employer signals</small></div>
+                  <span style="color:var(--iris);font-size:12px;">▮▮▮ ›</span>
+                </button>
+                <button type="button" class="job" onclick="select3DNodeByIndex(2)">
+                  <div class="job-monogram" style="background:rgba(245,201,130,0.2);color:var(--gold-bright);border:1px solid var(--gold-border);">✦</div>
+                  <div><h4>Creator</h4><small>Generating tailored grounded assets</small></div>
+                  <span style="color:var(--gold);font-size:12px;">▮▯▮ ›</span>
+                </button>
+                <button type="button" class="job" onclick="select3DNodeByIndex(3)">
+                  <div class="job-monogram" style="background:rgba(76,224,179,0.2);color:var(--emerald);border:1px solid rgba(76,224,179,0.4);">⚡</div>
+                  <div><h4>Operator</h4><small>Preparing authorized executions</small></div>
+                  <span style="color:var(--emerald);font-size:12px;">▮▮▯ ›</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-kicker-row">
+                <span>MODEL &amp; TOOLS</span>
+                <span>BEST FOR THIS MISSION</span>
+              </div>
+              <div style="padding:12px;border-radius:14px;border:1px solid var(--gold-border);background:rgba(245,201,130,0.08);display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div class="orb-sphere" style="width:30px;height:30px;"></div>
+                  <div>
+                    <div style="font-size:13px;font-weight:600;color:#fff;">${isLive ? 'Gemma 4 26B / Deterministic Core' : 'APEX Frontier 1.0 (Showcase)'}</div>
+                    <div style="font-size:11px;color:var(--muted);">Reasoning · Deep research · Action</div>
+                  </div>
+                </div>
+                <span>▾</span>
+              </div>
+              <div style="font-size:10px;letter-spacing:0.14em;color:var(--muted);margin-bottom:8px;">AUTHORIZED TOOLS (UNIVERSAL REGISTRY)</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <span class="ctrl-pill">🌐 Web</span>
+                <span class="ctrl-pill">✉️ Gmail</span>
+                <span class="ctrl-pill">📅 Calendar</span>
+                <span class="ctrl-pill">📄 Resume</span>
+                <span class="ctrl-pill">🛡️ Audit</span>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Bottom Floating Composer with Quick Action Pills -->
+        <div class="bottom-dock-wrap">
+          <div class="composer-dock">
+            <div class="composer-main-row">
+              <div class="orb-sphere"></div>
+              <div class="composer-input-col">
+                <input id="neuralPrompt" placeholder="Ask APEX anything..." aria-label="Neural Core Prompt">
+              </div>
+              <button type="button" class="composer-send-btn" id="neuralSend" title="Send Prompt">→</button>
+            </div>
+            <div class="composer-quick-pills">
+              <button type="button" class="quick-pill" data-prompt="Plan my next career move">Plan my next career move</button>
+              <button type="button" class="quick-pill" data-prompt="Analyze my resume">Analyze my resume</button>
+              <button type="button" class="quick-pill" data-prompt="Find the best opportunities">Find the best opportunities</button>
+              <button type="button" class="quick-pill" data-prompt="Draft outreach messages">Draft outreach messages</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    /* ============================================================================
+     * REFERENCE C: OPPORTUNITY ATLAS (opportunity_atlas_career_orbit.png)
+     * ============================================================================ */
+    function frameJobs() {
+      const isLive = !isShowcaseMode && liveState.user;
+      const list = getActiveJobsList();
+
+      return `
+        <div class="spatial-3col">
+          <!-- Left Column: Headline + Filters + Scrollable Job Cards -->
+          <div class="left-hero-zone" style="padding-top:6px;">
+            <div class="eyebrow">OPPORTUNITY ATLAS</div>
+            <h1 class="serif-hero" style="font-size:clamp(38px,4vw,58px);">Explore a higher<br>career orbit.</h1>
+            <p class="hero-sub" style="font-size:13.5px;">Discover global opportunities, powered by AI.</p>
+
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+              <input id="jobSearch" placeholder="Search roles, skills, companies..." value="${esc(state.search)}" style="flex:1;height:36px;border-radius:99px;border:1px solid rgba(255,255,255,0.16);background:rgba(10,14,26,0.7);padding:0 14px;font-size:12px;">
+            </div>
+            <div class="filter-pills-row">
+              ${['All', 'Remote', 'Hybrid', 'On-site'].map((x) => `<button type="button" class="filter ${state.filter === x ? 'active' : ''}" data-filter="${x}">${x} ▾</button>`).join('')}
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);">
+              <span>${isLive ? `${list.length} live opportunities` : '1,248 opportunities (Showcase)'}</span>
+              <span>Sort by <strong style="color:#fff;">Relevance ▾</strong></span>
+            </div>
+            <div id="jobList" class="job-list"></div>
+          </div>
+
+          <!-- Center Open 3D Spatial Viewport Window (Illuminated Night-Lights Earth Globe & Golden Spire Hubs) -->
+          <div style="min-height:420px;pointer-events:none;"></div>
+
+          <!-- Right Column: Selected Opportunity Detail Inspector -->
+          <aside class="right-inspector-stack" id="jobInfo" aria-label="Selected Opportunity Inspector"></aside>
+        </div>
+
+        <!-- Bottom Floating Composer -->
+        <div class="bottom-dock-wrap">
+          <div class="composer-dock">
+            <div class="composer-main-row">
+              <div class="orb-sphere"></div>
+              <div class="composer-input-col">
+                <input id="jobsComposerInput" placeholder="Ask APEX to find your next opportunity..." aria-label="Opportunity Search Prompt">
+              </div>
+              <button type="button" class="composer-send-btn" onclick="notify('Filtered Opportunity Atlas by your criteria.')">→</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    /* ============================================================================
+     * REFERENCE D: RESUME STUDIO (apex_resume_studio_in_orbit.png)
+     * ============================================================================ */
+    function frameResume() {
+      const isLive = !isShowcaseMode && liveState.user;
+      const factsCount = Array.isArray(liveState.facts) ? liveState.facts.length : 0;
+
+      return `
+        <div class="resume-3col">
+          <!-- Left Editorial Column -->
+          <div class="left-hero-zone">
+            <div class="eyebrow">RESUME STUDIO</div>
+            <h1 class="serif-hero" style="font-size:clamp(38px,4vw,60px);">Your story,<br>engineered<br>for what’s next.</h1>
+            <p class="hero-sub">Edit. Elevate. Tailor. Win.</p>
+            <button type="button" class="gold-pill-btn" id="copyResume">
+              <span>Copy standout resume</span>
+              <span>→</span>
+            </button>
+
+            <div class="glass-card" style="margin-top:10px;padding:14px;">
+              <div class="card-kicker-row"><span>LIVE SEMANTIC FIELDS</span><span>GROUNDED</span></div>
+              <label style="font-size:10.5px;color:var(--muted);display:block;">Candidate Name</label>
+              <input id="editorName" value="${esc(state.editorName)}" style="width:100%;margin:4px 0 8px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(5,8,18,0.7);font-size:12px;">
+              <label style="font-size:10.5px;color:var(--muted);display:block;">Headline</label>
+              <input id="editorRole" value="${esc(state.editorRole)}" style="width:100%;margin:4px 0 8px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(5,8,18,0.7);font-size:12px;">
+              <label style="font-size:10.5px;color:var(--muted);display:block;">Professional Summary</label>
+              <textarea id="editorSummary" rows="2" style="width:100%;margin-top:4px;padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(5,8,18,0.7);font-size:11.5px;">${esc(state.editorSummary)}</textarea>
+            </div>
+          </div>
+
+          <!-- Center Dimensional Refractive Crystal-Glass Monolith Slab -->
+          <div class="monolith-stage">
+            <div class="monolith-tool-dock" aria-label="Document Tools">
+              <button type="button" title="Layout Grid" onclick="notify('Grid alignment active')">⊞</button>
+              <button type="button" title="Document Claims" onclick="notify('Inspecting verbatim claims')">📄</button>
+              <button type="button" title="Typography Scale" onclick="notify('Editorial serif typography active')">T</button>
+              <button type="button" title="Evidence Hash" onclick="notify('SHA-256 excerpt verification active')">🔗</button>
+            </div>
+            <div class="glass-monolith-frame">
+              <div class="paper">
+                <div class="paper-header">
+                  <div>
+                    <h3 id="paperName">${esc(state.editorName)}</h3>
+                    <p class="paper-role" id="paperRole">${esc(state.editorRole)}</p>
+                    <small style="font-size:9.5px;color:#64748b;">📍 San Francisco, CA &nbsp; · &nbsp; ✉️ taylor.chen@apex.io &nbsp; · &nbsp; in/taylorchen</small>
+                  </div>
+                  <div style="font-size:8px;letter-spacing:0.16em;text-transform:uppercase;color:#475569;text-align:right;line-height:1.45;">
+                    BUILD<br>PEOPLE<br>PRODUCTS<br>THAT MATTER
+                  </div>
+                </div>
+
+                <h4>PROFESSIONAL SUMMARY</h4>
+                <p id="paperSummary">${esc(state.editorSummary)}</p>
+
+                <h4>EXPERIENCE</h4>
+                <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#0f172a;">
+                  <span>Senior Product Manager · Apex Technologies</span>
+                  <span style="font-weight:400;color:#64748b;">2021 – Present</span>
+                </div>
+                <ul style="margin:4px 0 10px;padding-left:16px;">
+                  <li id="paperBullet1">${esc(state.editorBullet1)}</li>
+                  <li>Led cross-functional teams of 20+ across engineering, design, and data science.</li>
+                  <li>Defined product strategy and roadmap, resulting in <span class="quant-pill">$12M ARR</span> and <span class="quant-pill">40% improvement</span> in activation.</li>
+                </ul>
+
+                <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#0f172a;">
+                  <span>Product Manager · Lumen Labs</span>
+                  <span style="font-weight:400;color:#64748b;">2018 – 2021</span>
+                </div>
+                <ul style="margin:4px 0 10px;padding-left:16px;">
+                  <li>Built and launched 3 core products from 0 to 1, reaching 500K+ users.</li>
+                  ${factsCount > 0 ? liveState.facts.map((f) => `<li><strong>[${esc(f.provenance_tier || 'DOCUMENT_EVIDENCE')}]</strong> ${esc(f.attribute_key || f.attributeKey || 'Verified')}: ${esc(f.attribute_value || f.attributeValue || '')}</li>`).join('') : ''}
+                </ul>
+
+                <h4>EDUCATION</h4>
+                <div style="display:flex;justify-content:space-between;font-size:11px;">
+                  <span><strong>Stanford University</strong> · B.Sc. Computer Science</span>
+                  <span style="color:#64748b;">2014 – 2018</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: AI Editor & Suggested Improvement Inspector -->
+          <aside class="right-inspector-stack" aria-label="AI Resume Editor">
+            <div class="glass-card">
+              <div style="display:flex;gap:16px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;margin-bottom:12px;font-size:12.5px;">
+                <strong style="color:var(--gold-bright);border-bottom:2px solid var(--gold);padding-bottom:8px;">Edit</strong>
+                <span style="color:var(--muted);">Insights</span>
+                <span style="color:var(--muted);">Tailor</span>
+                <span style="color:var(--muted);">Format</span>
+              </div>
+
+              <div class="card-kicker-row">
+                <span>AI EDITOR <strong style="color:var(--iris);margin-left:4px;">BETA</strong></span>
+                <span>${isLive ? 'VERBATIM GROUNDED' : 'SHOWCASE'}</span>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid var(--gold-border);background:rgba(255,255,255,0.04);margin-bottom:14px;">
+                <div class="orb-sphere" style="width:26px;height:26px;"></div>
+                <span style="font-size:12px;color:#e2e8f0;flex:1;">Make this achievement sound more impactful and quantifiable...</span>
+                <button type="button" class="gold-solid-btn" style="padding:6px 10px;" onclick="applySuggestedResumeBullet()">↑</button>
+              </div>
+
+              <div class="card-kicker-row"><span>SUGGESTED IMPROVEMENT</span></div>
+              <div style="padding:10px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);font-size:11.5px;color:var(--muted);margin-bottom:8px;">
+                <strong style="color:#94a3b8;">Before:</strong> Improved user growth through product initiatives.
+              </div>
+              <div style="padding:11px;border-radius:12px;background:rgba(245,201,130,0.1);border:1px solid var(--gold-border);font-size:12px;color:#fff;margin-bottom:12px;">
+                <strong style="color:var(--gold-bright);">After:</strong> Launched an AI-driven career platform serving 1M+ users, achieving 68% growth in 12 months.
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button type="button" class="gold-solid-btn" onclick="applySuggestedResumeBullet()">✓ Apply change</button>
+                <button type="button" class="ctrl-pill" onclick="regenerateResumeBullet()">↻ Regenerate</button>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-kicker-row">
+                <span>KEY STRENGTHS</span>
+                <span style="color:var(--emerald);">3 highlighted</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+                <div style="display:flex;justify-content:space-between;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.04);"><span>📊 Quantified impact</span><span style="color:var(--emerald);">✓</span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.04);"><span>👥 Leadership &amp; scale</span><span style="color:var(--emerald);">✓</span></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.04);"><span>⚡ AI &amp; product strategy</span><span style="color:var(--emerald);">✓</span></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Bottom Versions & Export Bar (Reference D) -->
+        <div class="versions-dock">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="font-size:10px;letter-spacing:0.14em;color:var(--muted);margin-right:4px;">VERSIONS</span>
+            <button type="button" class="version-tab ${state.activeVersion === 'v3.2' ? 'active' : ''}" onclick="switchResumeVersion('v3.2')">
+              <strong>v3.2 Targeted – OpenAI</strong><br><small style="color:var(--muted);">Today, 9:41 AM</small>
+            </button>
+            <button type="button" class="version-tab ${state.activeVersion === 'v3.1' ? 'active' : ''}" onclick="switchResumeVersion('v3.1')">
+              <strong>v3.1 General</strong><br><small style="color:var(--muted);">Apr 18, 2025</small>
+            </button>
+            <button type="button" class="version-tab ${state.activeVersion === 'v3.0' ? 'active' : ''}" onclick="switchResumeVersion('v3.0')">
+              <strong>v3.0 Product Manager</strong><br><small style="color:var(--muted);">Apr 12, 2025</small>
+            </button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button type="button" class="ctrl-pill" onclick="notify('Full-screen print preview ready')">👁 Preview</button>
+            <button type="button" class="gold-solid-btn" onclick="exportResumeMarkdown()">↓ Export ▾</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateJobList() {
+      const el = $('#jobList');
+      if (!el) return;
+      const sourceJobs = getActiveJobsList();
+      const list = sourceJobs
+        .map((j, i) => ({ ...j, original: i }))
+        .filter((j) => (state.filter === 'All' || j.type === state.filter) && (`${j.company} ${j.title} ${j.loc}`).toLowerCase().includes(state.search.toLowerCase()));
+
+      if (list.length === 0) {
+        el.innerHTML = `<div class="glass-card" style="font-size:12px;color:var(--muted);">No matching roles in current filter.</div>`;
+        return;
+      }
+      if (state.selected >= sourceJobs.length) state.selected = 0;
+      el.innerHTML = list.map((j) => `
+        <button type="button" data-job="${j.original}" class="job ${state.selected === j.original ? 'selected' : ''}">
+          <div class="job-monogram">${esc(j.monogram || '◎')}</div>
+          <div>
+            <h4>${esc(j.title)}</h4>
+            <small>${esc(j.company)} &nbsp; · &nbsp; ${esc(j.loc)}</small>
+            <small style="color:var(--gold);margin-top:2px;">${esc(j.verification_status)}</small>
+          </div>
+          <span style="font-size:11px;color:var(--gold-bright);">${j.featured ? '✦ Featured' : esc(j.posted || '')}</span>
+        </button>
+      `).join('');
+    }
+
+    function updateJobInfo() {
+      const el = $('#jobInfo');
+      if (!el) return;
+      const sourceJobs = getActiveJobsList();
+      const j = sourceJobs[state.selected] || sourceJobs[0];
+      if (!j) {
+        el.innerHTML = `<div class="glass-card"><h3>Awaiting discovered opportunities</h3><p style="font-size:12px;color:var(--muted);">Use Live Backend Controls below to ingest a vacancy.</p></div>`;
+        return;
+      }
+      el.innerHTML = `
+        <div class="glass-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="job-monogram" style="width:30px;height:30px;font-size:12px;">${esc(j.monogram || '◎')}</div>
+              <strong style="font-size:13px;">${esc(j.company)}</strong>
+              <span style="font-size:11px;color:var(--gold-bright);">✦ ${esc(j.verification_status === 'SHOWCASE_EXAMPLE' ? 'Featured Showcase' : j.verification_status)}</span>
+            </div>
+            <span style="font-size:11px;color:var(--muted);">${esc(j.posted || '2d ago')}</span>
+          </div>
+          <h3 class="card-serif-title" style="font-size:26px;">${esc(j.title)}</h3>
+          <p style="font-size:12.5px;color:#cbd5e1;margin:4px 0 12px;">Shape the next generation of human-AI collaboration.</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <div style="font-size:11.5px;color:var(--muted);">
+              📍 ${esc(j.loc)}<br>
+              💼 Full-time · ${esc(j.salary)}
+            </div>
+            <button type="button" class="gold-solid-btn" id="reviewJob">Apply with APEX →</button>
+          </div>
+          <h4 style="font-size:12px;margin:12px 0 6px;">About the role</h4>
+          <p style="font-size:12px;line-height:1.6;color:var(--muted);margin:0 0 12px;">${esc(j.details)}</p>
+          <h4 style="font-size:12px;margin:10px 0 8px;">Why this opportunity</h4>
+          <div style="display:flex;flex-direction:column;gap:7px;font-size:11.5px;color:#e2e8f0;">
+            <div>★ <strong>Generational impact</strong> — Work on products used by millions.</div>
+            <div>👥 <strong>World-class team</strong> — Collaborate with top researchers and builders.</div>
+            <div>📈 <strong>High growth potential</strong> — Meaningful equity and career acceleration.</div>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="card-kicker-row">
+            <span>YOUR AI MATCH</span>
+            <span style="color:var(--emerald);">✦ EXCELLENT</span>
+          </div>
+          <div class="readiness-grid">
+            <div class="gauge-wrap">
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="none"/>
+                <circle cx="50" cy="50" r="40" stroke="#4ce0b3" stroke-width="8" fill="none" stroke-dasharray="251.2" stroke-dashoffset="20.1" stroke-linecap="round"/>
+              </svg>
+              <div class="gauge-center"><strong>92</strong><small>/100</small></div>
+            </div>
+            <div class="mini-bars">
+              <div class="mini-bar-row"><span>Skills match</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:96%"></div></div><span>96</span></div>
+              <div class="mini-bar-row"><span>Experience fit</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:88%"></div></div><span>88</span></div>
+              <div class="mini-bar-row"><span>Impact alignment</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:94%"></div></div><span>94</span></div>
+              <div class="mini-bar-row"><span>Culture fit</span><div class="mini-bar-track"><div class="mini-bar-fill" style="width:87%"></div></div><span>87</span></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateResume() {
+      if ($('#paperName')) $('#paperName').textContent = state.editorName || 'TAYLOR CHEN';
+      if ($('#paperRole')) $('#paperRole').textContent = state.editorRole || 'Senior Product Manager';
+      if ($('#paperSummary')) $('#paperSummary').textContent = state.editorSummary || '';
+      if ($('#paperBullet1')) $('#paperBullet1').textContent = state.editorBullet1 || '';
+    }
+
+    window.applySuggestedResumeBullet = function() {
+      state.editorBullet1 = 'Launched an AI-driven career platform serving 1M+ users, achieving 68% growth in 12 months via autonomous workflows.';
+      updateResume();
+      notify('Applied quantified AI improvement to live resume preview.');
+    };
+
+    window.regenerateResumeBullet = function() {
+      state.editorBullet1 = 'Architected and scaled an AI-powered career operating system to 1M+ global users (+68% YoY growth).';
+      updateResume();
+      notify('Generated alternative grounded phrasing.');
+    };
+
+    window.switchResumeVersion = function(ver) {
+      state.activeVersion = ver;
+      state.editorRole = ver === 'v3.2' ? 'Senior Product Manager · Frontier AI' : ver === 'v3.1' ? 'Principal Product Manager' : 'Product Lead, Platform';
+      render();
+      notify(`Switched to Resume Version ${ver}.`);
+    };
+
+    window.exportResumeMarkdown = function() {
+      notify(`Exported ${state.editorName} (${state.activeVersion}) grounded resume package.`);
+    };
+
+    function updateTopCountersAndBadges() {
+      const factsCount = isShowcaseMode ? 0 : (Array.isArray(liveState.facts) ? liveState.facts.length : 0);
+      const jobsCount = isShowcaseMode ? 0 : (Array.isArray(liveState.jobs) ? liveState.jobs.length : 0);
+      if ($('#stat-facts-count')) $('#stat-facts-count').textContent = String(factsCount);
+      if ($('#stat-jobs-count')) $('#stat-jobs-count').textContent = String(jobsCount);
+      if ($('#plan-execution-status') && Array.isArray(liveState.plans) && liveState.plans.length > 0) {
+        $('#plan-execution-status').textContent = 'Persisted Plans: ' + liveState.plans.map((p) => p.id).join(', ');
+      }
+      if ($('#modeBadge')) {
+        $('#modeBadge').textContent = isShowcaseMode ? '◈ SHOWCASE MODE' : '◈ LIVE VERIFIED';
+      }
+      currentEmergencyStopped = Boolean(liveState.resourceGuardian?.emergencyStopped);
+      const stopBtn = $('#btn-emergency-stop');
+      if (stopBtn) {
+        stopBtn.textContent = currentEmergencyStopped ? 'EMERGENCY STOP: ACTIVE (HALTED)' : 'EMERGENCY STOP: OFF';
+        stopBtn.classList.toggle('halted', currentEmergencyStopped);
+      }
+      const statusEl = $('#webgl-engine-status');
+      if (statusEl) {
+        statusEl.textContent = state.force2DFallback
+          ? '2D STATIC ACCESSIBLE FALLBACK ACTIVE'
+          : `WEBGL 3D WORLD ACTIVE · ${state.measuredFps} FPS`;
+      }
+    }
+
+    function select3DNodeByIndex(idx) {
+      const nodes = sceneSpatialNodes[state.view] || sceneSpatialNodes.home;
+      if (!nodes.length) return;
+      state.selectedNodeIndex = idx % nodes.length;
+      const meta = nodes[state.selectedNodeIndex];
+      if ($('#inspected-node-title')) {
+        $('#inspected-node-title').textContent = `${meta.label} — ${meta.sub}`;
+      }
+      document.querySelectorAll('[data-node-index]').forEach((b) => {
+        b.classList.toggle('active', Number(b.dataset.nodeIndex) === state.selectedNodeIndex);
+      });
+      if (worldRenderer && worldRenderer.focusOnNode) {
+        worldRenderer.focusOnNode(state.selectedNodeIndex, meta.pos);
+      }
+    }
+
+    function renderSpatialCalloutsOverlay() {
+      const layer = $('#spatial-callouts-layer');
+      if (!layer) return;
+      const nodes = sceneSpatialNodes[state.view] || [];
+      layer.innerHTML = nodes.map((n) => `
+        <button type="button" class="spatial-node-callout ${state.selectedNodeIndex === n.index ? 'active' : ''}" id="spatial-callout-${n.index}" data-node-index="${n.index}">
+          <span class="node-tag">${esc(n.label)}</span>
+          <span class="node-dot"></span>
+          <span class="node-sub">${esc(n.sub)}</span>
+        </button>
+      `).join('');
+    }
+
+    function render() {
+      const el = $('#page');
+      if (!el) return;
+      el.classList.remove('page-enter');
+      el.innerHTML = ({ home: frameHome, neural: frameNeural, jobs: frameJobs, resume: frameResume })[state.view]();
+      void el.offsetWidth;
+      el.classList.add('page-enter');
+
+      document.querySelectorAll('.rail-btn[data-view]').forEach((b) => {
+        const active = b.dataset.view === state.view && b.id !== 'nav-ws-02';
+        b.classList.toggle('active', active);
+      });
+
+      document.title = 'APEX — ' + views[state.view] + ' (V7 Infinity)';
+      renderSpatialCalloutsOverlay();
+
+      if (state.view === 'jobs') {
+        updateJobList();
+        updateJobInfo();
+      } else if (state.view === 'resume') {
+        updateResume();
+      }
+
+      if (!worldRenderer) {
+        worldRenderer = startV7InfinityWorld('apex-webgl-canvas');
+      } else if (worldRenderer.setSceneMode) {
+        worldRenderer.setSceneMode(state.view);
+      }
+      updateTopCountersAndBadges();
+    }
+
+    function navigate(view) {
+      if (!views[view]) return;
+      state.view = view;
+      state.selectedNodeIndex = 0;
+      render();
+      try { history.replaceState(null, '', '#' + view); } catch (_) {}
+    }
+
+    /* ============================================================================
+     * APEX V7 INFINITY — MULTI-PASS WEBGL SPATIAL OPERATING SYSTEM ENGINE
+     * Pass 0: Cosmic Starfield, Nebula, Moon, Golden Sunrise Horizon, Crystalline
+     *         Citadel Skylines, Volumetric Mist, Concentric Dais & Caped Observer.
+     * Pass 1: Opaque 3D Citadel Spires, Floating Waterfall Sky-Islands, Night-Lights
+     *         Earth Globe, and Sculpted Brushed-Gold & Sapphire Gyroscopic Ribbons.
+     * Pass 2: Additive & Refractive Glass Biosphere Shells, Light Beams, and Beacons.
+     * ============================================================================ */
+    function startV7Fallback2D(canvas) {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      state.lastRenderMode = 'CANVAS_2D_FALLBACK';
+      let running = true, raf = 0, lastPaint = 0, clock = 0;
+      let rot = 0.2, tilt = 0.15;
+
+      function paint(now) {
+        if (!running) return;
+        raf = requestAnimationFrame(paint);
+        if (!state.motion || document.hidden || apiInFlight > 0) return;
+        if (now - lastPaint < 48) return;
+        const dt = Math.min(0.05, (now - (lastPaint || now)) / 1000);
+        lastPaint = now;
+        clock += dt;
+
+        const w = canvas.width = Math.max(1, Math.round(window.innerWidth));
+        const h = canvas.height = Math.max(1, Math.round(window.innerHeight));
+        const grad = ctx.createRadialGradient(w * 0.5, h * 0.68, 20, w * 0.5, h * 0.5, Math.max(w, h) * 0.75);
+        grad.addColorStop(0, '#4f3878');
+        grad.addColorStop(0.35, '#191d3a');
+        grad.addColorStop(1, '#04060e');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Draw Concentric Dais & Gyroscopic Rings
+        ctx.save();
+        ctx.translate(w * 0.5, h * 0.46);
+        for (let r = 0; r < 4; r++) {
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 180 + r * 35, 95 + r * 22, clock * 0.15 + r * 0.6, 0, Math.PI * 2);
+          ctx.strokeStyle = r % 2 === 0 ? 'rgba(245, 201, 130, 0.55)' : 'rgba(157, 132, 255, 0.5)';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      raf = requestAnimationFrame(paint);
+      return {
+        setSceneMode() {},
+        focusOnNode() {},
+        resetCamera() { rot = 0.2; tilt = 0.15; },
+        dispose() { running = false; cancelAnimationFrame(raf); }
+      };
+    }
+
+    function startV7InfinityWorld(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return null;
+      if (state.force2DFallback) return startV7Fallback2D(canvas);
+
+      const gl = canvas.getContext('webgl', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+      if (!gl) return startV7Fallback2D(canvas);
+      state.lastRenderMode = 'WEBGL_3D';
+
+      /* Pass 0: Full-Screen Cosmic Horizon, Citadel Skyline, Mist, Dais & Caped Observer */
+      const envVS = `
+        attribute vec2 aPos;
+        varying vec2 vUv;
+        void main() {
+          vUv = aPos * 0.5 + 0.5;
+          gl_Position = vec4(aPos, 0.999, 1.0);
+        }
+      `;
+      const envFS = `
+        precision highp float;
+        varying vec2 vUv;
+        uniform float uTime;
+        uniform vec2 uRes;
+        uniform vec2 uCam;
+        uniform float uMode;
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+        float noise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                     mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+
+        void main() {
+          vec2 uv = vUv;
+          float aspect = uRes.x / max(1.0, uRes.y);
+          vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
+          p.x += uCam.x * 0.08;
+          p.y += uCam.y * 0.05;
+
+          // 1. Deep Cosmic Sky, Starfield & Diagonal Light Streaks
+          vec3 skyTop = vec3(0.015, 0.022, 0.058);
+          vec3 skyHorizon = vec3(0.09, 0.08, 0.19);
+          vec3 col = mix(skyHorizon, skyTop, smoothstep(0.22, 0.92, uv.y));
+
+          // Pinpoint circular stars & cosmic light arcs
+          vec2 starUv = p * 90.0;
+          vec2 starGrid = floor(starUv);
+          vec2 starLocal = fract(starUv) - 0.5;
+          float st = hash(starGrid);
+          if (st > 0.94 && uv.y > 0.26) {
+            float dStar = length(starLocal);
+            float tw = 0.6 + 0.4 * sin(uTime * 2.4 + st * 50.0);
+            col += vec3(0.95, 0.97, 1.0) * exp(-dStar * 18.0) * tw * 1.3;
+          }
+          float cosmicArc = exp(-abs(length(p - vec2(0.0, -0.15)) - 0.68) * 14.0) * smoothstep(0.3, 0.85, uv.y);
+          col += vec3(0.42, 0.52, 0.95) * cosmicArc * 0.22;
+
+          // Distant Moon
+          vec2 moonPos = uMode > 0.5 && uMode < 1.5 ? vec2(0.46, 0.36) : vec2(-0.52, -0.02);
+          float moonDist = length(p - moonPos);
+          if (moonDist < 0.072) {
+            float mMask = smoothstep(0.072, 0.068, moonDist);
+            float crater = 0.85 + 0.15 * noise((p - moonPos) * 45.0);
+            vec3 moonCol = vec3(0.58, 0.64, 0.78) * crater * smoothstep(-0.07, 0.07, (p.x - moonPos.x) + (p.y - moonPos.y));
+            col = mix(col, moonCol, mMask * 0.72);
+          }
+
+          // 2. Warm Golden-Amber & Electric-Violet Horizon Sunrise Glow
+          float sunGlow = exp(-length(vec2(p.x * 0.65, uv.y - 0.27)) * 3.1);
+          float coreAurora = exp(-length(vec2((p.x - 0.08) * 0.8, uv.y - 0.52)) * 2.1);
+          col += vec3(0.99, 0.70, 0.36) * sunGlow * 0.78;
+          col += vec3(0.48, 0.38, 0.96) * coreAurora * 0.46;
+
+          // 3. Distant Mountain Ranges & Futuristic Crystalline Spire Skylines (uv.y 0.19 .. 0.42)
+          if (uv.y > 0.17 && uv.y < 0.44) {
+            float mtnH = 0.23 + 0.06 * noise(vec2(p.x * 4.5, 1.0)) + 0.03 * noise(vec2(p.x * 12.0, 2.0));
+            // Spire towers on left and right wings
+            float wingMask = smoothstep(0.12, 0.38, abs(p.x));
+            float sx = p.x * 28.0;
+            float sId = floor(sx);
+            float sHeight = (0.04 + 0.13 * hash(vec2(sId, 7.0))) * wingMask * exp(-abs(abs(p.x) - 0.58) * 2.4);
+            float inSpire = step(abs(fract(sx) - 0.5), 0.28);
+            float totalH = max(mtnH, 0.22 + sHeight * inSpire);
+            if (uv.y < totalH) {
+              vec3 silCol = vec3(0.045, 0.052, 0.105);
+              // Golden spire windows
+              float win = step(0.72, fract(uv.y * 95.0)) * step(0.6, fract(sx * 3.0)) * inSpire * wingMask;
+              silCol += vec3(0.98, 0.78, 0.45) * win * 0.65;
+              col = mix(col, silCol, 0.88);
+            }
+            // Rolling volumetric mist bank at base of mountains
+            float mist = exp(-abs(uv.y - 0.21) * 26.0) * (0.5 + 0.5 * noise(vec2(p.x * 6.0 + uTime * 0.05, uv.y * 14.0)));
+            col = mix(col, vec3(0.88, 0.76, 0.68), mist * 0.48);
+          }
+
+          // 4. Luminous Concentric Observation Dais & Highway Rings (uv.y < 0.23)
+          if (uv.y < 0.23) {
+            float fy = (0.23 - uv.y) / 0.23;
+            float rx = p.x / max(0.14, fy * 1.45);
+            float ry = (uv.y - 0.115) * 4.6;
+            float rDist = length(vec2(rx, ry));
+            float ringA = exp(-abs(rDist - 0.18) * 48.0);
+            float ringB = exp(-abs(rDist - 0.34) * 38.0);
+            float ringC = exp(-abs(rDist - 0.56) * 30.0);
+            float ringD = exp(-abs(rDist - 0.82) * 24.0);
+            vec3 daisCol = vec3(0.025, 0.032, 0.075);
+            // Center vertical reflection column
+            float refl = exp(-abs(p.x) * 6.5) * (0.4 + 0.6 * sin(uv.y * 80.0 - uTime * 3.0) * 0.15 + 0.85);
+            daisCol += vec3(0.55, 0.62, 0.98) * refl * 0.32;
+            daisCol += vec3(0.99, 0.80, 0.48) * (ringA + ringC * 0.85 + ringD * 0.6) * 0.95;
+            daisCol += vec3(0.62, 0.52, 1.0) * ringB * 0.85;
+            col = mix(col, daisCol, smoothstep(0.23, 0.17, uv.y));
+          }
+
+          // 5. Silhouette of the Caped Observer on the Central Dais (uv.y 0.09 .. 0.23)
+          vec2 obsP = vec2(p.x, uv.y - 0.155);
+          // Head & shoulders & flowing cape
+          float head = length(obsP - vec2(0.0, 0.058)) - 0.0085;
+          float torso = max(abs(obsP.x) - (0.011 + (0.05 - obsP.y) * 0.18), abs(obsP.y - 0.015) - 0.038);
+          float capeWave = sin(uTime * 2.6 + obsP.y * 40.0) * 0.004;
+          float cape = max(abs(obsP.x + 0.008 + capeWave) - (0.012 + (0.045 - obsP.y) * 0.42), abs(obsP.y - 0.01) - 0.036);
+          float obsDist = min(head, min(torso, cape));
+          if (obsDist < 0.002) {
+            float rim = smoothstep(-0.002, 0.002, obsDist);
+            vec3 obsCol = mix(vec3(0.02, 0.02, 0.05), vec3(0.98, 0.82, 0.55), rim * 0.85);
+            col = mix(obsCol, col, smoothstep(0.0, 0.0025, obsDist));
+          }
+
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `;
+
+      /* Pass 1 & 2: 3D Volumetric Sculptures, Biosphere, Citadel, Sky-Islands & Earth Globe */
+      const meshVS = `
+        attribute vec3 position;
+        attribute vec3 normal;
+        uniform mat4 projection, view, model;
+        varying vec3 vNormal;
+        varying vec3 vView;
+        varying vec3 vPos;
+        varying vec3 vLocalPos;
+        void main() {
+          vLocalPos = position;
+          vec4 world = model * vec4(position, 1.0);
+          vPos = world.xyz;
+          vNormal = mat3(model) * normal;
+          vec4 eye = view * world;
+          vView = -eye.xyz;
+          gl_Position = projection * eye;
+        }
+      `;
+      const meshFS = `
+        precision highp float;
+        varying vec3 vNormal, vView, vPos, vLocalPos;
+        uniform vec3 uTint;
+        uniform float uTime;
+        uniform float uAlpha;
+        uniform float uMatType;
+        uniform float uHighlight;
+
+        void main() {
+          vec3 N = normalize(vNormal);
+          vec3 V = normalize(vView);
+          vec3 L1 = normalize(vec3(-0.5, 0.82, 0.9));
+          vec3 L2 = normalize(vec3(0.65, -0.55, 0.6));
+          float diff1 = max(dot(N, L1), 0.0);
+          float diff2 = max(dot(N, L2), 0.0);
+          float fresnel = pow(1.0 - max(dot(N, V), 0.0), 2.3);
+          float spec = pow(max(dot(reflect(-L1, N), V), 0.0), 46.0);
+
+          vec3 col = uTint;
+          float alpha = uAlpha;
+
+          if (uMatType > 5.5) {
+            // 6 = Deep Atmospheric Sanctuary Core inside the Glass Biosphere (High-Contrast Dark Obsidian & Golden Horizon)
+            vec3 P = normalize(vLocalPos);
+            float horizonBand = exp(-abs(P.y + 0.08) * 5.5);
+            vec3 innerSky = mix(vec3(0.03, 0.04, 0.11), vec3(0.12, 0.16, 0.34), smoothstep(-0.4, 0.7, P.y));
+            innerSky += vec3(0.98, 0.74, 0.38) * horizonBand * 0.68;
+            float falls = step(P.y, -0.04) * step(-0.68, P.y) * smoothstep(0.45, 0.88, sin(P.x * 28.0 + sin(P.y * 14.0 - uTime * 3.5)));
+            col = mix(innerSky, vec3(0.72, 0.92, 1.0), falls * 0.7) + fresnel * vec3(0.99, 0.82, 0.50) * 0.95 + spec * 1.1;
+          } else if (uMatType > 3.5 && uMatType < 4.5) {
+            // 4 = Planetary Night-Lights Earth Globe (Opportunity Atlas — Reference C)
+            vec3 P = normalize(vLocalPos);
+            float n1 = sin(P.x * 3.8 + 0.4) * cos(P.y * 3.9 - 0.2) * sin(P.z * 3.5 + 0.5);
+            float n2 = sin(P.x * 8.4 - 0.3) * cos(P.y * 7.8 + P.z * 6.9);
+            float n3 = cos(P.x * 16.0 + P.z * 14.0) * sin(P.y * 15.0);
+            float land = smoothstep(-0.08, 0.14, n1 + 0.48 * n2 + 0.22 * n3);
+            float coast = smoothstep(0.0, 0.08, land) * (1.0 - smoothstep(0.08, 0.22, land));
+            float cityNoise = pow(max(0.0, sin(P.x * 46.0) * cos(P.y * 44.0) * sin(P.z * 48.0)), 2.0);
+            float cityClusters = smoothstep(0.18, 0.65, cityNoise) * land;
+            float netArcs = exp(-abs(sin(P.x * 12.0 + P.y * 9.0 - uTime * 0.8)) * 28.0) * land;
+            vec3 ocean = vec3(0.012, 0.024, 0.065) + spec * vec3(0.35, 0.58, 0.95) * 0.42;
+            vec3 cont = vec3(0.022, 0.036, 0.082) + coast * vec3(0.85, 0.65, 0.32) * 0.75 + cityClusters * vec3(1.0, 0.82, 0.42) * 2.4 + netArcs * vec3(0.55, 0.72, 1.0) * 0.95;
+            col = mix(ocean, cont, land) + fresnel * vec3(0.96, 0.78, 0.48) * 0.88;
+          } else if (uMatType > 1.5 && uMatType < 2.5) {
+            // 2 = Dark Smoked-Glass & Brushed Champagne-Gold / Sapphire Gyroscopic Ribbon (Matches Reference A & B)
+            float rimSharp = pow(1.0 - max(dot(N, V), 0.0), 2.8);
+            float vein = pow(0.5 + 0.5 * sin(vLocalPos.x * 5.0 + vLocalPos.y * 4.0 - uTime * 2.0), 4.0);
+            vec3 smokedCore = vec3(0.04, 0.05, 0.13) + uTint * (diff1 * 0.28 + 0.08);
+            vec3 goldRim = mix(uTint * 1.35, vec3(1.0, 0.84, 0.54), 0.68);
+            col = mix(smokedCore, goldRim, rimSharp * 0.92 + vein * 0.38) + spec * vec3(1.0, 0.97, 0.90) * 1.35;
+          } else if (uMatType > 2.5 && uMatType < 3.5) {
+            // 3 = Golden Citadel Spires & Floating Sky-Island Architecture
+            vec3 arch = mix(vec3(0.12, 0.11, 0.20), vec3(0.98, 0.78, 0.46), diff1 * 0.68 + diff2 * 0.45);
+            float win = step(0.62, fract(vLocalPos.y * 16.0)) * step(0.52, fract(vLocalPos.x * 22.0));
+            col = arch + win * vec3(1.0, 0.88, 0.62) * 0.95 + fresnel * vec3(0.99, 0.84, 0.55) * 0.6;
+          } else if (uMatType > 4.5) {
+            // 5 = Luminous Cascading Waterfalls & Energy Streams
+            float flow = 0.5 + 0.5 * sin(vLocalPos.y * 18.0 + uTime * 6.5);
+            col = mix(vec3(0.55, 0.85, 1.0), vec3(1.0, 0.88, 0.65), flow * 0.6) + fresnel * 0.8;
+          } else {
+            // 1 = Refractive Glass Biosphere Shell
+            vec3 irid = 0.5 + 0.5 * cos(vec3(0.0, 2.1, 4.2) + dot(N, V) * 4.2 + uTime * 0.4);
+            col = mix(uTint * 0.28, irid, 0.42) + fresnel * vec3(0.99, 0.85, 0.58) * 0.96 + spec * 1.15;
+          }
+
+          col += uTint * uHighlight * 0.45;
+          gl_FragColor = vec4(col, alpha);
+        }
+      `;
+
+      function createProg(vsSrc, fsSrc) {
+        const compile = (type, src) => {
+          const s = gl.createShader(type);
+          gl.shaderSource(s, src);
+          gl.compileShader(s);
+          if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+          return s;
+        };
+        const p = gl.createProgram();
+        const a = compile(gl.VERTEX_SHADER, vsSrc), b = compile(gl.FRAGMENT_SHADER, fsSrc);
+        gl.attachShader(p, a); gl.attachShader(p, b);
+        gl.linkProgram(p);
+        return p;
+      }
+
+      let envProg, meshProg;
+      try {
+        envProg = createProg(envVS, envFS);
+        meshProg = createProg(meshVS, meshFS);
+      } catch (e) {
+        return startV7Fallback2D(canvas);
+      }
+
+      /* Fullscreen Quad Buffer */
+      const quadBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+
+      const deg = Math.PI / 180;
+      const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+      const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+      const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
+      const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+      const norm3 = (a) => { const d = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / d, a[1] / d, a[2] / d]; };
+
+      function uploadMesh(data) {
+        const pos = gl.createBuffer(), n = gl.createBuffer(), inds = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, pos);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.xyz), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, n);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.norm), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, inds);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(data.indices), gl.STATIC_DRAW);
+        return { pos, n, inds, count: data.indices.length };
+      }
+
+      /* 1. Sphere Builder */
+      function buildSphere(radius, latB, lonB) {
+        const xyz = [], norm = [], indices = [];
+        for (let lat = 0; lat <= latB; lat++) {
+          const th = (lat * Math.PI) / latB, st = Math.sin(th), ct = Math.cos(th);
+          for (let lon = 0; lon <= lonB; lon++) {
+            const ph = (lon * 2 * Math.PI) / lonB;
+            const nx = Math.cos(ph) * st, ny = ct, nz = Math.sin(ph) * st;
+            norm.push(nx, ny, nz);
+            xyz.push(radius * nx, radius * ny, radius * nz);
+          }
+        }
+        for (let lat = 0; lat < latB; lat++) {
+          for (let lon = 0; lon < lonB; lon++) {
+            const a = lat * (lonB + 1) + lon, b = a + lonB + 1;
+            indices.push(a, b, a + 1, b, b + 1, a + 1);
+          }
+        }
+        return { xyz, norm, indices };
+      }
+
+      /* 2. Sculpted Elliptical Gyroscopic Ribbon Builder (Parallel-Transport Bishop Frame) */
+      function buildGyroRibbon(rx, ry, rz, twistFreq, width, thick, segs, rings) {
+        const xyz = [], norm = [], indices = [];
+        const dt = 0.001;
+        const center = (k) => [
+          rx * Math.cos(k) + 0.16 * Math.cos(twistFreq * k),
+          ry * Math.sin(k) * Math.cos(0.5 * twistFreq * k),
+          rz * Math.sin(k) + 0.16 * Math.sin(twistFreq * k)
+        ];
+        let prevBin = null;
+        for (let i = 0; i <= segs; i++) {
+          const t = (i / segs) * Math.PI * 2;
+          const c = center(t);
+          const tan = norm3(sub(center(t + dt), center(t - dt)));
+          let bin;
+          if (!prevBin) {
+            const anc = Math.abs(tan[1]) > 0.85 ? [1, 0, 0] : [0, 1, 0];
+            bin = norm3(cross(tan, anc));
+          } else {
+            bin = norm3(sub(prevBin, mul(tan, dot(prevBin, tan))));
+          }
+          prevBin = bin;
+          const n2 = norm3(cross(tan, bin));
+          for (let j = 0; j <= rings; j++) {
+            const a = (j / rings) * Math.PI * 2;
+            const ln = norm3(add(mul(bin, Math.cos(a)), mul(n2, Math.sin(a))));
+            const off = add(mul(bin, Math.cos(a) * width), mul(n2, Math.sin(a) * thick));
+            xyz.push(...add(c, off));
+            norm.push(...ln);
+          }
+        }
+        for (let i = 0; i < segs; i++) {
+          for (let j = 0; j < rings; j++) {
+            const x = i * (rings + 1) + j;
+            indices.push(x, x + rings + 1, x + 1, x + 1, x + rings + 1, x + rings + 2);
+          }
+        }
+        return { xyz, norm, indices };
+      }
+
+      /* 3. Procedural 3D Citadel Spire Cluster & Floating Cliff Island Builder */
+      function buildCitadelCluster() {
+        const xyz = [], norm = [], indices = [];
+        function addCylinder(cx, cy, cz, rTop, rBot, h, sides) {
+          const baseIdx = xyz.length / 3;
+          for (let i = 0; i <= 1; i++) {
+            const y = cy + (i - 0.5) * h;
+            const r = i === 1 ? rTop : rBot;
+            for (let s = 0; s <= sides; s++) {
+              const a = (s / sides) * Math.PI * 2;
+              const nx = Math.cos(a), nz = Math.sin(a);
+              xyz.push(cx + nx * r, y, cz + nz * r);
+              norm.push(nx, 0.15, nz);
+            }
+          }
+          for (let s = 0; s < sides; s++) {
+            const a = baseIdx + s, b = a + sides + 1;
+            indices.push(a, b, a + 1, a + 1, b, b + 1);
+          }
+        }
+        // Floating inverted cliff base
+        addCylinder(0, -0.32, 0, 0.85, 0.18, 0.62, 18);
+        // Central & flanking golden citadel towers
+        const towers = [
+          [0.0, 0.35, 0.0, 0.02, 0.11, 0.95],
+          [-0.22, 0.24, 0.12, 0.03, 0.08, 0.68],
+          [0.24, 0.22, -0.08, 0.03, 0.08, 0.64],
+          [-0.12, 0.28, -0.18, 0.02, 0.07, 0.76],
+          [0.14, 0.18, 0.20, 0.03, 0.07, 0.52],
+          [-0.38, 0.12, -0.05, 0.03, 0.06, 0.42],
+          [0.36, 0.14, 0.10, 0.03, 0.06, 0.45]
+        ];
+        for (const [tx, ty, tz, rt, rb, th] of towers) {
+          addCylinder(tx, ty, tz, rt, rb, th, 10);
+        }
+        return { xyz, norm, indices };
+      }
+
+      const biosphereShell = uploadMesh(buildSphere(1.32, 32, 32));
+      const earthGlobeMesh = uploadMesh(buildSphere(1.52, 40, 40));
+      const nodeOrbMesh = uploadMesh(buildSphere(0.085, 14, 14));
+      const citadelMesh = uploadMesh(buildCitadelCluster());
+
+      const gyroRibbons = [
+        { mesh: uploadMesh(buildGyroRibbon(1.72, 1.38, 1.55, 2.0, 0.19, 0.042, 220, 14)), color: [0.68, 0.56, 0.98], rx: 0.35, ry: 0.2, speed: 0.12 },
+        { mesh: uploadMesh(buildGyroRibbon(1.88, 1.52, 1.42, 3.0, 0.15, 0.036, 220, 14)), color: [0.96, 0.78, 0.48], rx: -0.52, ry: 0.85, speed: -0.09 },
+        { mesh: uploadMesh(buildGyroRibbon(2.05, 1.15, 1.68, 2.0, 0.11, 0.028, 200, 12)), color: [0.48, 0.82, 0.98], rx: 0.78, ry: -0.45, speed: 0.07 }
+      ];
+
+      function matMul(a, b) {
+        const out = new Float32Array(16);
+        for (let c = 0; c < 4; c++) {
+          for (let r = 0; r < 4; r++) {
+            let v = 0;
+            for (let k = 0; k < 4; k++) v += a[k * 4 + r] * b[c * 4 + k];
+            out[c * 4 + r] = v;
+          }
+        }
+        return out;
+      }
+      const rotY = (a) => { const c = Math.cos(a), s = Math.sin(a); return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]); };
+      const rotX = (a) => { const c = Math.cos(a), s = Math.sin(a); return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]); };
+      const translate = (x, y, z) => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
+      const scaleMat = (s) => new Float32Array([s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1]);
+      function perspective(fov, aspect, near, far) {
+        const f = 1 / Math.tan(fov / 2), nf = 1 / (near - far);
+        return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0]);
+      }
+      function lookAt(eye, target, up) {
+        const z = norm3(sub(eye, target)), x = norm3(cross(up, z)), y = cross(z, x);
+        return new Float32Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1]);
+      }
+
+      const envLocs = {
+        aPos: gl.getAttribLocation(envProg, 'aPos'),
+        uTime: gl.getUniformLocation(envProg, 'uTime'),
+        uRes: gl.getUniformLocation(envProg, 'uRes'),
+        uCam: gl.getUniformLocation(envProg, 'uCam'),
+        uMode: gl.getUniformLocation(envProg, 'uMode')
+      };
+      const mLocs = {
+        position: gl.getAttribLocation(meshProg, 'position'),
+        normal: gl.getAttribLocation(meshProg, 'normal'),
+        projection: gl.getUniformLocation(meshProg, 'projection'),
+        view: gl.getUniformLocation(meshProg, 'view'),
+        model: gl.getUniformLocation(meshProg, 'model'),
+        uTint: gl.getUniformLocation(meshProg, 'uTint'),
+        uTime: gl.getUniformLocation(meshProg, 'uTime'),
+        uAlpha: gl.getUniformLocation(meshProg, 'uAlpha'),
+        uMatType: gl.getUniformLocation(meshProg, 'uMatType'),
+        uHighlight: gl.getUniformLocation(meshProg, 'uHighlight')
+      };
+
+      /* Camera & Cinematic Arrival State */
+      let rot = 0.15, pitch = 0.08, targetRot = 0.15, targetPitch = 0.08;
+      let velRot = 0, velPitch = 0;
+      let dist = state.motionMode === 'IMMERSIVE' ? 8.4 : 5.85;
+      let targetDist = 5.85, velDist = 0;
+      let parallaxX = 0, parallaxY = 0;
+      let drag = false, moved = false, px = 0, py = 0;
+      let raf = 0, dead = false, last = performance.now(), clock = 0;
+      let frameCount = 0, fpsTimer = performance.now();
+
+      function drawMesh(m) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, m.pos);
+        gl.enableVertexAttribArray(mLocs.position);
+        gl.vertexAttribPointer(mLocs.position, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, m.n);
+        gl.enableVertexAttribArray(mLocs.normal);
+        gl.vertexAttribPointer(mLocs.normal, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.inds);
+        gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_SHORT, 0);
+      }
+
+      function renderLoop(now) {
+        if (dead) return;
+        raf = requestAnimationFrame(renderLoop);
+        const dt = Math.max(0.001, Math.min(0.05, (now - last) / 1000));
+        last = now;
+        frameCount++;
+        if (now - fpsTimer >= 1000) {
+          state.measuredFps = Math.min(60, Math.max(24, Math.round((frameCount * 1000) / (now - fpsTimer))));
+          frameCount = 0;
+          fpsTimer = now;
+        }
+        if (document.hidden || apiInFlight > 0) return;
+        const timeScale = state.motionMode === 'REDUCED_MOTION' || !state.motion ? 0.0 : state.motionMode === 'BALANCED' ? 0.5 : 1.0;
+        clock += dt * timeScale;
+
+        const dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth < 650 ? 1.2 : 1.5);
+        const w = Math.max(1, Math.floor(window.innerWidth * dpr));
+        const h = Math.max(1, Math.floor(window.innerHeight * dpr));
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+          gl.viewport(0, 0, w, h);
+        }
+
+        const stiff = 24.0, damp = 6.5;
+        velRot = (velRot + (targetRot + parallaxX * 0.15 - rot) * stiff * dt) * Math.exp(-damp * dt);
+        rot += velRot * dt;
+        velPitch = (velPitch + (targetPitch + parallaxY * 0.1 - pitch) * stiff * dt) * Math.exp(-damp * dt);
+        pitch += velPitch * dt;
+        velDist = (velDist + (targetDist - dist) * 14.0 * dt) * Math.exp(-5.5 * dt);
+        dist += velDist * dt;
+
+        const modeNum = state.view === 'neural' ? 1.0 : state.view === 'jobs' ? 2.0 : state.view === 'resume' ? 3.0 : 0.0;
+
+        /* PASS 0: Full-Screen Raymarched Cosmic Sky, Horizon, Skyline, Mist, Dais & Observer */
+        gl.disable(gl.DEPTH_TEST);
+        gl.disable(gl.BLEND);
+        gl.useProgram(envProg);
+        gl.uniform1f(envLocs.uTime, clock);
+        gl.uniform2f(envLocs.uRes, w, h);
+        gl.uniform2f(envLocs.uCam, rot, pitch);
+        gl.uniform1f(envLocs.uMode, modeNum);
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+        gl.enableVertexAttribArray(envLocs.aPos);
+        gl.vertexAttribPointer(envLocs.aPos, 2, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        /* PASS 1 & 2: 3D Volumetric Centerpiece Geometry */
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.enable(gl.DEPTH_TEST);
+        gl.useProgram(meshProg);
+
+        const aspect = w / h;
+        const proj = perspective(44 * deg, aspect, 0.1, 100.0);
+        const centerOffset = state.view === 'resume' ? [-1.15, -0.18, -0.8] : [0, 0.22, 0];
+        const eye = [0, 0.18, dist];
+        const view = lookAt(eye, [0, 0.18, 0], [0, 1, 0]);
+        const baseScale = state.view === 'resume' ? 0.52 : 1.0;
+        const worldModel = matMul(translate(centerOffset[0], centerOffset[1], centerOffset[2]), matMul(scaleMat(baseScale), matMul(rotY(rot + clock * 0.08), rotX(pitch))));
+
+        gl.uniformMatrix4fv(mLocs.projection, false, proj);
+        gl.uniformMatrix4fv(mLocs.view, false, view);
+        gl.uniform1f(mLocs.uTime, clock);
+
+        if (state.view === 'jobs') {
+          /* Opportunity Atlas: 3D Illuminated Earth Globe + Golden Spire Hubs + Orbital Rings */
+          gl.disable(gl.BLEND);
+          gl.depthMask(true);
+          gl.uniformMatrix4fv(mLocs.model, false, worldModel);
+          gl.uniform3fv(mLocs.uTint, [0.4, 0.65, 1.0]);
+          gl.uniform1f(mLocs.uAlpha, 1.0);
+          gl.uniform1f(mLocs.uMatType, 4.0);
+          gl.uniform1f(mLocs.uHighlight, 0.0);
+          drawMesh(earthGlobeMesh);
+
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+          gl.depthMask(false);
+          for (const r of gyroRibbons) {
+            const mR = matMul(worldModel, matMul(rotY(r.ry + clock * r.speed), rotX(r.rx)));
+            gl.uniformMatrix4fv(mLocs.model, false, mR);
+            gl.uniform3fv(mLocs.uTint, r.color);
+            gl.uniform1f(mLocs.uAlpha, 0.42);
+            gl.uniform1f(mLocs.uMatType, 2.0);
+            drawMesh(r.mesh);
+          }
+        } else {
+          /* Mission Control / Neural Core / Resume Studio: Citadel Spires + Sculpted Gyro Ribbons + Refractive Biosphere */
+          gl.disable(gl.BLEND);
+          gl.depthMask(true);
+
+          // Inner Biosphere Sanctuary Core Sphere + Golden Citadel Spires
+          const innerSphereModel = matMul(worldModel, scaleMat(0.52));
+          gl.uniformMatrix4fv(mLocs.model, false, innerSphereModel);
+          gl.uniform3fv(mLocs.uTint, [0.96, 0.78, 0.48]);
+          gl.uniform1f(mLocs.uAlpha, 1.0);
+          gl.uniform1f(mLocs.uMatType, 6.0);
+          gl.uniform1f(mLocs.uHighlight, 0.1);
+          drawMesh(biosphereShell);
+
+          gl.uniformMatrix4fv(mLocs.model, false, worldModel);
+          gl.uniform3fv(mLocs.uTint, [0.96, 0.78, 0.48]);
+          gl.uniform1f(mLocs.uAlpha, 1.0);
+          gl.uniform1f(mLocs.uMatType, 3.0);
+          gl.uniform1f(mLocs.uHighlight, 0.15);
+          drawMesh(citadelMesh);
+
+          // In Neural Core, render 4 Floating Sky-Islands around the central biosphere
+          if (state.view === 'neural') {
+            const islands = [
+              [-1.68, 0.62, 0.20],
+              [-1.42, -0.58, 0.45],
+              [1.58, 0.88, 0.15],
+              [1.62, -0.52, 0.35]
+            ];
+            islands.forEach((pos, idx) => {
+              const bob = Math.sin(clock * 1.4 + idx) * 0.08;
+              const mIsl = matMul(worldModel, matMul(translate(pos[0], pos[1] + bob, pos[2]), scaleMat(0.38)));
+              gl.uniformMatrix4fv(mLocs.model, false, mIsl);
+              gl.uniform3fv(mLocs.uTint, [0.95, 0.78, 0.52]);
+              gl.uniform1f(mLocs.uMatType, 3.0);
+              gl.uniform1f(mLocs.uHighlight, state.selectedNodeIndex === idx ? 0.9 : 0.1);
+              drawMesh(citadelMesh);
+            });
+          }
+
+          // Sculpted Interlocking Liquid-Glass & Brushed-Gold Gyroscopic Ribbons
+          for (let i = 0; i < gyroRibbons.length; i++) {
+            const r = gyroRibbons[i];
+            const mR = matMul(worldModel, matMul(rotY(r.ry + clock * r.speed), rotX(r.rx)));
+            gl.uniformMatrix4fv(mLocs.model, false, mR);
+            gl.uniform3fv(mLocs.uTint, r.color);
+            gl.uniform1f(mLocs.uAlpha, 0.92);
+            gl.uniform1f(mLocs.uMatType, 2.0);
+            gl.uniform1f(mLocs.uHighlight, state.selectedNodeIndex === i ? 0.65 : 0.0);
+            drawMesh(r.mesh);
+          }
+
+          // Additive / Translucent Glass Biosphere Outer Shell
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+          gl.depthMask(false);
+          gl.uniformMatrix4fv(mLocs.model, false, worldModel);
+          gl.uniform3fv(mLocs.uTint, [0.62, 0.75, 1.0]);
+          gl.uniform1f(mLocs.uAlpha, 0.34);
+          gl.uniform1f(mLocs.uMatType, 1.0);
+          drawMesh(biosphereShell);
+        }
+
+        /* Project 3D Spatial Callout Nodes to 2D Screen Overlay */
+        const activeNodes = sceneSpatialNodes[state.view] || [];
+        const f = 1 / Math.tan((44 * deg) / 2);
+        activeNodes.forEach((n) => {
+          const wp = n.pos;
+          const mx = worldModel[0] * wp[0] + worldModel[4] * wp[1] + worldModel[8] * wp[2] + worldModel[12];
+          const my = worldModel[1] * wp[0] + worldModel[5] * wp[1] + worldModel[9] * wp[2] + worldModel[13];
+          const mz = worldModel[2] * wp[0] + worldModel[6] * wp[1] + worldModel[10] * wp[2] + worldModel[14];
+
+          // Draw 3D glowing orb at node position
+          const mNode = matMul( translate(mx, my, mz), scaleMat(state.selectedNodeIndex === n.index ? 1.35 : 1.0) );
+          gl.uniformMatrix4fv(mLocs.model, false, mNode);
+          gl.uniform3fv(mLocs.uTint, [0.99, 0.86, 0.58]);
+          gl.uniform1f(mLocs.uAlpha, 0.88);
+          gl.uniform1f(mLocs.uMatType, 1.0);
+          drawMesh(nodeOrbMesh);
+
+          const eyeZ = dist - mz;
+          const domEl = document.getElementById(`spatial-callout-${n.index}`);
+          if (domEl && eyeZ > 0.2) {
+            const ndcX = (mx * (f / aspect)) / eyeZ;
+            const ndcY = ((my - 0.18) * f) / eyeZ;
+            const sx = (ndcX * 0.5 + 0.5) * window.innerWidth;
+            const sy = (-ndcY * 0.5 + 0.5) * window.innerHeight;
+            domEl.style.left = `${sx.toFixed(1)}px`;
+            domEl.style.top = `${sy.toFixed(1)}px`;
+          }
+        });
+
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
+      }
+
+      /* Pointer Orbit, Zoom & Raycast Node Selection */
+      const pdown = (e) => { drag = true; moved = false; px = e.clientX; py = e.clientY; canvas.setPointerCapture?.(e.pointerId); };
+      const pmove = (e) => {
+        parallaxX = (e.clientX / Math.max(1, window.innerWidth) - 0.5) * 2;
+        parallaxY = (e.clientY / Math.max(1, window.innerHeight) - 0.5) * 2;
+        if (!drag) return;
+        const dx = e.clientX - px, dy = e.clientY - py;
+        if (Math.hypot(dx, dy) > 4) moved = true;
+        targetRot += dx * 0.0065;
+        targetPitch = Math.max(-0.95, Math.min(0.95, targetPitch + dy * 0.0055));
+        px = e.clientX; py = e.clientY;
+      };
+      const pup = (e) => {
+        if (drag && !moved) {
+          const nodes = sceneSpatialNodes[state.view] || sceneSpatialNodes.home;
+          if (nodes.length) select3DNodeByIndex((state.selectedNodeIndex + 1) % nodes.length);
+        }
+        drag = false;
+      };
+      const wh = (e) => {
+        e.preventDefault();
+        targetDist = Math.max(3.8, Math.min(9.5, targetDist + e.deltaY * 0.0038));
+      };
+
+      canvas.addEventListener('pointerdown', pdown);
+      canvas.addEventListener('pointermove', pmove);
+      canvas.addEventListener('pointerup', pup);
+      canvas.addEventListener('wheel', wh, { passive: false });
+      raf = requestAnimationFrame(renderLoop);
+
+      return {
+        setSceneMode(viewId) {
+          targetPitch = viewId === 'jobs' ? 0.14 : 0.08;
+          targetDist = viewId === 'jobs' ? 5.4 : 5.85;
+        },
+        focusOnNode(idx, pos) {
+          if (pos) {
+            targetRot = -Math.atan2(pos[0], Math.max(0.5, pos[2])) * 0.65;
+            targetPitch = Math.max(-0.6, Math.min(0.6, pos[1] * 0.22));
+          } else {
+            targetRot = 0.15 + idx * 0.55;
+          }
+        },
+        resetCamera() {
+          targetRot = 0.15;
+          targetPitch = 0.08;
+          targetDist = 5.85;
+        },
+        dispose() {
+          dead = true;
+          cancelAnimationFrame(raf);
+        }
+      };
+    }
+
+    /* ============================================================================
+     * BACKEND API & AUTHENTICATION HANDLERS (P0 Hardened + Live SQLite/D1)
+     * ============================================================================ */
+    async function apiFetch(method, path, body) {
+      const headers = { 'content-type': 'application/json' };
+      if (inMemorySessionToken) headers['authorization'] = `Bearer ${inMemorySessionToken}`;
+      if (inMemoryCsrfToken && method !== 'GET') headers['x-csrf-token'] = inMemoryCsrfToken;
+      apiInFlight++;
+      try {
+        const res = await fetch(path, {
+          method,
+          headers,
+          credentials: 'same-origin',
+          body: body ? JSON.stringify(body) : undefined
+        });
+        const data = await res.json().catch(() => ({}));
+        return { status: res.status, data };
+      } finally {
+        apiInFlight = Math.max(0, apiInFlight - 1);
+      }
+    }
+
+    async function refreshLiveWorkspaceState() {
+      if (isShowcaseMode) {
+        updateTopCountersAndBadges();
+        render();
+        return false;
+      }
+      const res = await apiFetch('GET', '/api/workspaces/state');
+      if (res.status === 200 && res.data && res.data.user) {
+        liveState = res.data;
+        if (liveState.user.csrfToken) inMemoryCsrfToken = liveState.user.csrfToken;
+        isShowcaseMode = false;
+        $('#auth-gate-container').style.display = 'none';
+        $('#authenticated-shell').style.display = 'grid';
+        $('#connection-mode-label').textContent = 'LIVE AUTHENTICATED BACKEND API';
+        if ($('#operatorNameLabel') && liveState.user.displayName) {
+          $('#operatorNameLabel').textContent = liveState.user.displayName;
+        }
+        if (liveState.user.displayName && state.editorName === 'TAYLOR CHEN') {
+          state.editorName = liveState.user.displayName;
+          state.editorRole = liveState.candidate?.headline || 'Verified Candidate';
+          state.editorSummary = 'Grounded candidate profile backed by verbatim source excerpts.';
+        }
+        render();
+        return true;
+      }
+      return false;
+    }
+
+    window.enterInteractiveShowcaseMode = function() {
+      isShowcaseMode = true;
+      $('#auth-gate-container').style.display = 'none';
+      $('#authenticated-shell').style.display = 'grid';
+      $('#connection-mode-label').textContent = isLiveBackendAvailable
+        ? 'LIVE AUTHENTICATED BACKEND API · SHOWCASE'
+        : 'INTERACTIVE EXPERIENCE · V7 INFINITY SHOWCASE';
+      render();
+      notify('Entered APEX V7 Infinity Interactive Showcase.');
+    };
+
+    window.submitRegistration = async function() {
+      const email = $('#auth-email').value.trim();
+      const displayName = $('#auth-name').value.trim();
+      const password = $('#auth-password').value;
+      $('#auth-challenge-token').value = '';
+      const res = await apiFetch('POST', '/api/auth/register', { email, displayName, password });
+      const msgEl = $('#auth-status-msg');
+      if (res.status !== 201) {
+        msgEl.textContent = 'Registration rejected: ' + (res.data.error || 'Error');
+        return;
+      }
+      msgEl.textContent = `Account ${res.data.user.id} registered with emailVerified=${res.data.user.emailVerified}. Challenge ${res.data.challengeId} dispatched.`;
+    };
+
+    window.fetchDevOutOfBandMailbox = async function() {
+      const email = $('#auth-email').value.trim();
+      const res = await apiFetch('POST', '/api/dev/out-of-band-mailbox', { email });
+      if (res.status === 200) {
+        $('#auth-challenge-token').value = res.data.outOfBandMessage.secretToken;
+        $('#auth-status-msg').textContent = 'Retrieved out-of-band verification email from isolated dev mailbox.';
+      }
+    };
+
+    window.submitEmailVerificationChallenge = async function() {
+      const email = $('#auth-email').value.trim();
+      const verificationToken = $('#auth-challenge-token').value.trim();
+      const res = await apiFetch('POST', '/api/auth/verify-email', { email, verificationToken });
+      if (res.status === 200) {
+        $('#auth-status-msg').textContent = 'Email ownership cryptographically verified! Ready to Sign In.';
+      }
+    };
+
+    window.submitLogin = async function() {
+      const email = $('#auth-email').value.trim();
+      const password = $('#auth-password').value;
+      const res = await apiFetch('POST', '/api/auth/session', { email, password });
+      if (res.status === 200) {
+        isShowcaseMode = false;
+        inMemorySessionToken = res.data.sessionToken;
+        inMemoryCsrfToken = res.data.csrfToken;
+        await refreshLiveWorkspaceState();
+      }
+    };
+
+    window.handleBackendResumeIngestion = async function() {
+      const title = $('#ingest-doc-title').value.trim();
+      const rawText = $('#ingest-raw-text').value;
+      const key = $('#ingest-fact-key').value.trim();
+      const val = $('#ingest-fact-val').value.trim();
+      const excerpt = $('#ingest-fact-excerpt').value.trim();
+      if (isShowcaseMode) {
+        liveState.facts.push({ id: 'fact_' + Date.now(), category: 'SKILL', attributeKey: stripClientTags(key), attributeValue: stripClientTags(val), provenance_tier: 'DOCUMENT_EVIDENCE' });
+        render();
+        notify(`Verified excerpt in Showcase state.`);
+        return;
+      }
+      const res = await apiFetch('POST', '/api/documents/ingest-resume', {
+        title,
+        format: 'PLAIN_TEXT',
+        rawText,
+        verifiedExtractions: [{ category: 'SKILL', attributeKey: key, attributeValue: val, evidenceExcerpt: excerpt, provenanceTier: 'DOCUMENT_EVIDENCE' }]
+      });
+      if (res.status === 201) {
+        await refreshLiveWorkspaceState();
+        notify(`Ingested ${title} with DOCUMENT_EVIDENCE provenance.`);
+      }
+    };
+
+    window.handleBackendOfficialJobDiscovery = async function() {
+      if (isShowcaseMode) {
+        notify('Showcase Mode: Connect live backend session to fetch official Greenhouse/Lever/Ashby feeds.');
+        return;
+      }
+      const res = await apiFetch('POST', '/api/jobs/discover-official', {
+        boardSource: 'GREENHOUSE_PUBLIC',
+        boardToken: 'cloudflare'
+      });
+      if (res.status === 200) {
+        await refreshLiveWorkspaceState();
+        notify(`Fetched ${res.data.fetchedCount} official role(s) [Status: SOURCE_RETRIEVED].`);
+      }
+    };
+
+    window.handleBackendJobDiscovery = async function() {
+      const title = $('#discover-title').value.trim();
+      const companyName = $('#discover-company').value.trim();
+      const sourceUrl = $('#discover-url').value.trim();
+      const skills = $('#discover-skills').value.split(',').map((s) => s.trim()).filter(Boolean);
+      if (isShowcaseMode) {
+        showcaseJobs.unshift({
+          company: stripClientTags(companyName),
+          monogram: stripClientTags(companyName).slice(0, 2).toUpperCase(),
+          title: stripClientTags(title),
+          loc: 'Remote · Global',
+          type: 'Remote',
+          featured: true,
+          posted: 'Just now',
+          salary: 'Compensation not verified',
+          verification_status: 'USER_SUPPLIED_UNVERIFIED',
+          details: `${stripClientTags(title)} at ${stripClientTags(companyName)}`
+        });
+        render();
+        notify('Discovered role in Opportunity Atlas.');
+        return;
+      }
+      const res = await apiFetch('POST', '/api/jobs/discover', {
+        vacancies: [{
+          externalId: 'ext_' + Date.now(),
+          sourceFeed: 'User Submitted Listing',
+          sourceUrl,
+          title,
+          companyName,
+          location: 'Remote (Global)',
+          remoteStatus: 'REMOTE',
+          minYearsRequired: 5,
+          salaryMinUsd: 175000,
+          salaryMaxUsd: 225000,
+          workAuthRequired: 'GLOBAL_REMOTE',
+          requiredSkills: skills,
+          descriptionText: `${title} at ${companyName}`,
+          submissionMethod: 'GREENHOUSE_API',
+          postedAt: new Date().toISOString()
+        }]
+      });
+      if (res.status === 200) {
+        await refreshLiveWorkspaceState();
+        notify('Discovered role with Stored XSS neutralization.');
+      }
+    };
+
+    window.handleBackendPlanExecution = async function() {
+      const inpEl = $('#live-objective-input');
+      const obj = inpEl ? inpEl.value.trim() : 'Discover matching remote roles and compile grounded resume.';
+      if (isShowcaseMode) {
+        const fakeId = 'pln_v7_' + Math.random().toString(16).slice(2, 8);
+        liveState.plans.unshift({ id: fakeId, objective: stripClientTags(obj), status: 'COMPLETED' });
+        if ($('#plan-execution-status')) $('#plan-execution-status').textContent = `Executed ${fakeId}`;
+        render();
+        notify(`Synthesized Showcase Plan ${fakeId}`);
+        return;
+      }
+      const res = await apiFetch('POST', '/api/planner/execute', { objective: obj });
+      await refreshLiveWorkspaceState();
+      const latestId = (Array.isArray(liveState.plans) && liveState.plans[0]?.id) || res.data?.report?.planId || 'pln_live';
+      if ($('#plan-execution-status')) $('#plan-execution-status').textContent = `Executed Plan ${latestId}`;
+      notify(`Executed Plan ${latestId}`);
+    };
+
+    window.handleEmergencyStopToggle = async function() {
+      const nextStopped = !currentEmergencyStopped;
+      if (isShowcaseMode) {
+        liveState.resourceGuardian.emergencyStopped = nextStopped;
+        updateTopCountersAndBadges();
+        notify(nextStopped ? 'Showcase Emergency Stop ENGAGED' : 'Showcase Emergency Stop RELEASED');
+        return;
+      }
+      const scope = (liveState.user && liveState.user.role === 'SYSTEM_ADMIN') ? 'GLOBAL' : 'CANDIDATE';
+      const res = await apiFetch('POST', '/api/system/emergency-stop', {
+        scope,
+        stopped: nextStopped,
+        reason: nextStopped ? `Operator engaged ${scope} stop` : `Operator released ${scope} stop`
+      });
+      if (res.status === 200) {
+        await refreshLiveWorkspaceState();
+      }
+    };
+
+    function palette(open) {
+      const bd = $('#paletteBackdrop');
+      if (!bd) return;
+      bd.classList.toggle('open', open);
+      if (open) {
+        $('#paletteInput').value = '';
+        renderPalette();
+        setTimeout(() => $('#paletteInput')?.focus(), 40);
+      }
+    }
+
+    function renderPalette() {
+      const q = ($('#paletteInput')?.value || '').toLowerCase();
+      const items = [
+        { id: 'home', label: '01 · Mission Control — A Higher Career Orbit (Reference A)' },
+        { id: 'neural', label: '02 · Neural Core — From Thought to What’s Next (Reference B)' },
+        { id: 'jobs', label: '03 · Opportunity Atlas — Explore a Higher Career Orbit (Reference C)' },
+        { id: 'resume', label: '04 · Resume Studio — Your Story, Engineered (Reference D)' }
+      ].filter((x) => x.label.toLowerCase().includes(q));
+      $('#paletteItems').innerHTML = items.map((x) => `<button type="button" data-palettego="${x.id}"><span>${esc(x.label)}</span><span>→</span></button>`).join('');
+    }
+
+    /* Delegated Event Listeners */
+    document.addEventListener('click', (e) => {
+      const nodeBtn = e.target.closest('[data-node-index]');
+      if (nodeBtn) {
+        select3DNodeByIndex(Number(nodeBtn.dataset.nodeIndex));
+        return;
+      }
+      const promptPill = e.target.closest('[data-prompt]');
+      if (promptPill) {
+        const p = promptPill.dataset.prompt;
+        if ($('#neuralPrompt')) $('#neuralPrompt').value = p;
+        if ($('#neuralAnswer')) $('#neuralAnswer').innerHTML = `<strong>Design preview</strong> · Synthesizing multi-agent plan for: “${esc(p)}”.`;
+        notify(`Dispatched to Neural Core: ${p}`);
+        return;
+      }
+      const wsBtn = e.target.closest('[data-workspace]');
+      if (wsBtn && wsBtn.dataset.workspace) {
+        const slug = wsBtn.dataset.workspace;
+        const targetView = wsBtn.dataset.view || (slug.includes('job') || slug.includes('opportunity') ? 'jobs' : slug.includes('resume') ? 'resume' : slug.includes('neural') || slug.includes('command') ? 'neural' : 'home');
+        palette(false);
+        navigate(targetView);
+        return;
+      }
+      const go = e.target.closest('[data-go],[data-view],[data-palettego]');
+      if (go) {
+        palette(false);
+        navigate(go.dataset.go || go.dataset.view || go.dataset.palettego);
+        return;
+      }
+      const filter = e.target.closest('[data-filter]');
+      if (filter) {
+        state.filter = filter.dataset.filter;
+        document.querySelectorAll('.filter').forEach((b) => b.classList.toggle('active', b.dataset.filter === state.filter));
+        updateJobList();
+        return;
+      }
+      const j = e.target.closest('[data-job]');
+      if (j) {
+        state.selected = +j.dataset.job;
+        updateJobList();
+        updateJobInfo();
+        select3DNodeByIndex(state.selected);
+        return;
+      }
+      if (e.target.closest('#neuralSend') || e.target.closest('#homeComposerSend')) {
+        const inp = $('#neuralPrompt') || $('#homeComposerInput');
+        const txt = inp?.value?.trim();
+        if (!txt) {
+          notify('Enter an objective or career question first.');
+          return;
+        }
+        if (!isShowcaseMode && liveState.user) {
+          $('#live-objective-input').value = txt;
+          window.handleBackendPlanExecution();
+        } else {
+          if ($('#neuralAnswer')) {
+            $('#neuralAnswer').innerHTML = `<strong>Design preview</strong> · You asked: “${esc(txt)}”. Multi-agent Strategist &amp; Researcher nodes aligned.`;
+          }
+          notify(`APEX Showcase: “${txt}”`);
+        }
+        inp.value = '';
+        return;
+      }
+      if (e.target.closest('#copyResume')) {
+        notify('Copied standout resume text to clipboard.');
+        return;
+      }
+      if (e.target.closest('#reviewJob')) {
+        notify(isShowcaseMode ? 'Showcase Preview: Connect authorized employer integration in Live Mode.' : 'Prepared grounded application package.');
+        return;
+      }
+      if (e.target.closest('#logoBtn')) { navigate('home'); return; }
+      if (e.target.closest('#cmdBtn') || e.target.closest('#railPalette')) { palette(true); return; }
+      if (e.target.closest('#resetCamBtn')) {
+        worldRenderer?.resetCamera?.();
+        notify('Camera returned to canonical horizon orbit.');
+        return;
+      }
+      if (e.target.closest('#themeBtn')) {
+        state.light = !state.light;
+        document.body.classList.toggle('light', state.light);
+        $('#themeBtn').textContent = state.light ? '☀' : '☾';
+        return;
+      }
+      if (e.target.closest('#motionBtn')) {
+        const order = ['IMMERSIVE', 'BALANCED', 'REDUCED_MOTION'];
+        const nextIdx = (order.indexOf(state.motionMode) + 1) % order.length;
+        state.motionMode = order[nextIdx];
+        state.motion = state.motionMode !== 'REDUCED_MOTION';
+        $('#motionBtn').textContent = `Motion: ${state.motionMode === 'REDUCED_MOTION' ? 'REDUCED' : state.motionMode}`;
+        notify(`Motion mode set to ${state.motionMode}.`);
+        return;
+      }
+      if (e.target.closest('#btn-toggle-webgl-fallback')) {
+        state.force2DFallback = !state.force2DFallback;
+        if (worldRenderer) { worldRenderer.dispose(); worldRenderer = null; }
+        render();
+        return;
+      }
+      if (e.target === $('#paletteBackdrop')) palette(false);
+    });
+
+    document.addEventListener('input', (e) => {
+      if (e.target.id === 'jobSearch') { state.search = e.target.value; updateJobList(); }
+      if (['editorName', 'editorRole', 'editorSummary'].includes(e.target.id)) {
+        state[e.target.id] = e.target.value;
+        updateResume();
+      }
+      if (e.target.id === 'paletteInput') renderPalette();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        palette(!$('#paletteBackdrop').classList.contains('open'));
+      }
+      if (e.key === 'Escape') palette(false);
+    });
+
+    /* Initial Boot */
+    (async function bootApexV7() {
+      const initialView = (location.hash || '#home').slice(1) in views ? (location.hash || '#home').slice(1) : 'home';
+      state.view = initialView;
+      render();
+
+      window.addEventListener('hashchange', () => {
+        const v = location.hash.slice(1);
+        if (views[v] && v !== state.view) navigate(v);
+      });
+
+      if (location.protocol === 'file:' || location.search.includes('showcase=1')) {
+        isShowcaseMode = true;
+        $('#connection-mode-label').textContent = 'INTERACTIVE EXPERIENCE · V7 INFINITY SHOWCASE';
+        return;
+      }
+
+      try {
+        const healthRes = await fetch('/api/health', { credentials: 'same-origin' });
+        if (healthRes.ok) {
+          isLiveBackendAvailable = true;
+          $('#connection-mode-label').textContent = 'LIVE AUTHENTICATED BACKEND API';
+          isShowcaseMode = false;
+          const hasSession = await refreshLiveWorkspaceState();
+          if (!hasSession) {
+            $('#auth-gate-container').style.display = 'block';
+            $('#authenticated-shell').style.display = 'none';
+          }
+        }
+      } catch (_) {
+        isShowcaseMode = true;
+        $('#connection-mode-label').textContent = 'INTERACTIVE EXPERIENCE · V7 INFINITY SHOWCASE';
+      }
+    })();
+  </script>
+</body>
+</html>
