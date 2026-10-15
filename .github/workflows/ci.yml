@@ -1,0 +1,39 @@
+name: APEX Genesis — independent source CI
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig*.json'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  source-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Clean install from lockfile
+        run: npm ci
+      - name: Strict TypeScript compilation
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          npx tsc -p tsconfig.worker.json --noEmit
+          npx tsc -p tsconfig.browser.json --noEmit
+      - name: Public source safety and lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Full supplied test suite
+        run: npm test
