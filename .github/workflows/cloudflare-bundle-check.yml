@@ -29,6 +29,8 @@ jobs:
         run: npx --no-install tsc -p tsconfig.worker.json --noEmit
       - name: Compile Cloudflare Worker bundle locally WITHOUT deployment
         run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-preflight
+      - name: Validate D1 schema migrations locally (NO REMOTE WRITES)
+        run: npx --yes wrangler@4 d1 migrations apply apex_genesis_db --local
       - name: Explain remaining setup (no secrets printed)
         shell: bash
         run: |
