@@ -21,7 +21,10 @@ jobs:
       - name: Regenerate lockfile without running third-party scripts
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Check clean install
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          test -x node_modules/.bin/tsc
+          node_modules/.bin/tsc --version
       - name: Check lockfile integrity
         run: |
           node - <<'NODE'
@@ -29,8 +32,9 @@ jobs:
           const pkg=require('./package.json'),lock=require('./package-lock.json');
           if(lock.packages[''].version!==pkg.version) throw new Error('Root version mismatch');
           const count=Object.keys(lock.packages).length;
-          if(count<60) throw new Error('Lockfile still incomplete: '+count+' entries');
-          console.log('Validated '+count+' lockfile package entries');
+          if(count<100) throw new Error('Lockfile still incomplete: '+count+' entries');
+          if(!lock.packages['node_modules/typescript']?.bin?.tsc) throw new Error('TypeScript binary missing from lockfile');
+          console.log('Validated '+count+' complete lockfile package entries');
           NODE
       - name: Commit the generated lockfile
         run: |
