@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ApexD1Database } from '../src/db/d1-sqlite-engine';
+import { ApexD1Database, D1Result } from '../src/db/d1-sqlite-engine';
 import { SecurityGuard } from '../src/security/auth';
 import {
   CANONICAL_PUBLIC_REPO_URL,
@@ -21,7 +21,7 @@ import { RecruitmentWorkflowEngine } from '../src/recruitment/engine';
 import { AuthorizedIntegrationNexus } from '../src/integrations/nexus';
 import { ApexApplicationApi } from '../src/api/router';
 import worker, { Env } from '../src/worker';
-import { CloudflareD1DatabaseBinding, CloudflareD1PreparedStatement } from '../src/types/cloudflare';
+import { CloudflareD1DatabaseBinding, CloudflareD1PreparedStatement, CloudflareD1Result } from '../src/types/cloudflare';
 
 const TEST_DB_PATH = path.resolve(__dirname, '../../.tmp_v9_1_reliability_test.sqlite');
 const SCHEMA_1 = path.resolve(__dirname, '../../migrations/0001_genesis_schema.sql');
@@ -29,6 +29,10 @@ const SCHEMA_2 = path.resolve(__dirname, '../../migrations/0002_v2_resurrection.
 const SCHEMA_3 = path.resolve(__dirname, '../../migrations/0003_v8_reality_engine.sql');
 const SCHEMA_4 = path.resolve(__dirname, '../../migrations/0004_v9_production_truth.sql');
 const SCHEMA_5 = path.resolve(__dirname, '../../migrations/0005_v9_public_repo_reliability.sql');
+
+function adaptD1Result<T>(result: D1Result<T>): CloudflareD1Result<T> {
+  return { ...result, meta: { ...result.meta, duration: result.meta.duration_ms } };
+}
 
 function createAsyncD1Binding(sqliteDb: ApexD1Database): CloudflareD1DatabaseBinding {
   const wrapStmt = (sql: string, boundValues: unknown[] = []): CloudflareD1PreparedStatement => ({
@@ -41,11 +45,11 @@ function createAsyncD1Binding(sqliteDb: ApexD1Database): CloudflareD1DatabaseBin
     },
     async all<T = Record<string, unknown>>() {
       await Promise.resolve();
-      return sqliteDb.prepare(sql).bind(...boundValues).all<T>();
+      return adaptD1Result(sqliteDb.prepare(sql).bind(...boundValues).all<T>());
     },
-    async run() {
+    async run<T = Record<string, any>>() {
       await Promise.resolve();
-      return sqliteDb.prepare(sql).bind(...boundValues).run();
+      return adaptD1Result(sqliteDb.prepare(sql).bind(...boundValues).run() as D1Result<T>);
     },
   });
 
@@ -53,10 +57,10 @@ function createAsyncD1Binding(sqliteDb: ApexD1Database): CloudflareD1DatabaseBin
     prepare(query: string) {
       return wrapStmt(query, []);
     },
-    async batch(statements: CloudflareD1PreparedStatement[]) {
-      const out = [];
+    async batch<T = Record<string, any>>(statements: CloudflareD1PreparedStatement[]) {
+      const out: CloudflareD1Result<T>[] = [];
       for (const s of statements) {
-        out.push(await s.all());
+        out.push(await s.all<T>());
       }
       return out;
     },
@@ -79,7 +83,7 @@ test('APEX GENESIS V9.1 — Public Repository Safety, Timestamped Webhook Anti-R
   const webhookSecret = 'apex_v9_1_test_employer_webhook_secret_key_64bytes_verified';
   const sessionSecret = 'apex_v9_1_super_secret_session_signing_key_2026_verified_32bytes';
 
-  const security = new SecurityGuard(db, sessionSecret, { environmentMode: 'development' });
+  const security = new SecurityGuard(db, sessionSecret, { serverEnvironmentMode: 'development' });
   const neural = new ApexNeuralCore(db);
   neural.registerProvider(new DeterministicStructuredEngine());
   const memory = new MemoryEngine(db);

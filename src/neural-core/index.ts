@@ -434,7 +434,8 @@ export class GoogleGeminiProvider implements ModelProvider {
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error('INFERENCE_TIMEOUT')), timeoutMs)),
     ]);
     const outputText = typeof raw === 'string' ? raw : raw.text;
-    const hasMeasured = typeof raw === 'object' && raw !== null && Boolean(raw.usage);
+    const usage = typeof raw === 'object' && raw !== null ? raw.usage : undefined;
+    const hasMeasured = Boolean(usage);
     return {
       providerId: this.providerId,
       modelId: 'gemini-2.5-flash',
@@ -442,8 +443,8 @@ export class GoogleGeminiProvider implements ModelProvider {
       executionCategory: this.getExecutionCategory(),
       usageAccountingMode: hasMeasured ? 'PROVIDER_MEASURED' : 'UNREPORTED_BY_PROVIDER',
       outputText,
-      promptTokens: hasMeasured ? raw.usage.promptTokens : null,
-      completionTokens: hasMeasured ? raw.usage.completionTokens : null,
+      promptTokens: usage?.promptTokens ?? null,
+      completionTokens: usage?.completionTokens ?? null,
       neuronsConsumed: null,
       latencyMs: Date.now() - start,
       fallbackUsed: false,

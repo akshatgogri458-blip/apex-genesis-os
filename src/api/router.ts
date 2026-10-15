@@ -311,7 +311,7 @@ export class ApexApplicationApi {
           attributeValue: stripExecutableMarkup(b.attributeValue),
           verified: Boolean(b.verified),
           evidenceSource: stripExecutableMarkup(b.evidenceSource || 'User Confirmation'),
-          evidenceExcerpt: b.evidenceExcerpt ? stripExecutableMarkup(b.evidenceExcerpt) : undefined,
+          evidenceExcerpt: b.evidenceExcerpt ? stripExecutableMarkup(b.evidenceExcerpt) : '',
           confidenceScore: b.confidenceScore ?? 1.0,
         });
         return { status: 201, body: { fact: created } };
